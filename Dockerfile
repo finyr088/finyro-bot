@@ -14,4 +14,5 @@ COPY . .
 EXPOSE 8080
 
 # Один процесс: FastAPI (API + мини-апп) и Telegram-бот (polling) вместе.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Порт фиксирован на 8080 — его же Timeweb определяет из EXPOSE и проверяет healthcheck'ом.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
