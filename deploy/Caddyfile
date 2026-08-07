@@ -1,0 +1,6 @@
+# Автоматический HTTPS (Let's Encrypt) для домена из переменной DOMAIN.
+# Используем бесплатный домен вида <ip-с-дефисами>.sslip.io — покупать ничего не нужно.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8080
+}

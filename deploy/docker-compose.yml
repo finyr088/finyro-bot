@@ -1,0 +1,39 @@
+# Продакшн-стек для VPS: приложение Финуро + Caddy (HTTPS-прокси).
+# Запуск: docker compose --env-file ../.env -f deploy/docker-compose.yml up -d --build
+# (или используйте deploy/setup.sh — он всё сделает сам)
+name: finyro
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    env_file: ../.env
+    environment:
+      # База хранится в томе — переживает пересборки/перезапуски.
+      DATABASE_URL: sqlite+aiosqlite:////data/finyro.db
+    volumes:
+      - appdata:/data
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    restart: unless-stopped
+
+volumes:
+  appdata:
+  caddydata:
+  caddyconfig:
