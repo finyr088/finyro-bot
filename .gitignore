@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Локальная БД и секреты
+*.db
+*.sqlite3
+.env
+
+# ОС / редакторы
+.DS_Store
+.idea/
+.vscode/

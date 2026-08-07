@@ -1,0 +1,205 @@
+/* Финуро — фирменный стиль (Violet / Lime, шрифт Manrope) */
+:root {
+  --violet-900: #2E1178;
+  --violet-700: #4A1FC0;
+  --violet-500: #6C3CE9;
+  --violet-300: #A98BF5;
+  --lime-500: #C6FF4E;
+  --lime-400: #A6F03F;
+  --lime-300: #8DE04A;
+  --lavender: #F1EDFF;
+  --graphite: #141414;
+
+  --bg: var(--lavender);
+  --card: #ffffff;
+  --text: var(--graphite);
+  --muted: #6b6b76;
+  --radius: 18px;
+  --shadow: 0 6px 24px rgba(46, 17, 120, 0.10);
+  --nav-h: 68px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { min-height: 100vh; padding-bottom: calc(var(--nav-h) + 16px); }
+
+/* --- App bar --- */
+.appbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--violet-700), var(--violet-500));
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+.appbar img { width: 38px; height: 38px; border-radius: 11px; }
+.appbar .brand { font-weight: 800; font-size: 18px; letter-spacing: .2px; }
+.appbar .sub { font-size: 12px; opacity: .85; }
+.appbar .spacer { flex: 1; }
+.pill {
+  font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+  background: rgba(255,255,255,.16); white-space: nowrap;
+}
+.pill.active { background: var(--lime-500); color: var(--violet-900); }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%; flex: 0 0 40px;
+  border: 2px solid var(--lime-500); background: rgba(255,255,255,.14); color: #fff;
+  font-family: inherit; font-weight: 800; font-size: 17px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .12s ease;
+}
+.avatar:active { transform: scale(.94); }
+
+/* Продолжить просмотр */
+.continue-card { display: flex; align-items: center; gap: 14px; cursor: pointer; }
+.continue-card .thumb {
+  width: 56px; height: 56px; flex: 0 0 56px; border-radius: 14px;
+  background: linear-gradient(135deg, var(--violet-500), var(--violet-700));
+  display: flex; align-items: center; justify-content: center; font-size: 26px;
+}
+.continue-card .play {
+  width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%;
+  background: var(--lime-500); color: var(--violet-900); font-size: 16px;
+  display: flex; align-items: center; justify-content: center; padding-left: 3px;
+}
+.continue-card h3 { margin-bottom: 2px; }
+.continue-card .badge { margin-top: 6px; display: inline-block; }
+
+/* --- Content --- */
+.screen { padding: 16px; display: none; animation: fade .2s ease; }
+.screen.active { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+h1.title { font-size: 22px; font-weight: 800; margin: 4px 0 16px; }
+h2.section { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--violet-700); margin: 22px 0 10px; }
+.muted { color: var(--muted); }
+
+.card {
+  background: var(--card); border-radius: var(--radius);
+  padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px;
+}
+.card.tap { cursor: pointer; transition: transform .12s ease; }
+.card.tap:active { transform: scale(.985); }
+
+.row { display: flex; align-items: center; gap: 12px; }
+.row .grow { flex: 1; min-width: 0; }
+.card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+.badge { font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.badge.new { background: var(--lime-500); color: var(--violet-900); }
+.badge.done { background: #e7f8d8; color: #3f7d1a; }
+.badge.soon { background: var(--lavender); color: var(--violet-700); }
+.badge.todo { background: #f0eefb; color: var(--muted); }
+
+/* --- Stats --- */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stat { background: var(--card); border-radius: var(--radius); padding: 14px 10px; text-align: center; box-shadow: var(--shadow); }
+.stat .num { font-size: 26px; font-weight: 800; color: var(--violet-700); line-height: 1.1; }
+.stat .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.status-card { background: linear-gradient(135deg, var(--violet-700), var(--violet-500)); color: #fff; }
+.status-card h3 { color: #fff; }
+.status-card .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
+.dot.green { background: var(--lime-500); }
+.dot.red { background: #ff6b6b; }
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; border: none; cursor: pointer;
+  font-family: inherit; font-weight: 700; font-size: 15px;
+  padding: 14px 18px; border-radius: 14px;
+  background: var(--lime-500); color: var(--violet-900);
+  transition: filter .12s ease, transform .12s ease;
+}
+.btn:active { transform: scale(.98); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.secondary { background: var(--lavender); color: var(--violet-700); }
+.btn.ghost { background: transparent; color: var(--violet-700); }
+
+.back { background: none; border: none; color: #fff; font-size: 15px; font-weight: 700; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+
+/* --- Video --- */
+.player-wrap { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.player-wrap video { width: 100%; display: block; background: #000; }
+.watermark {
+  position: absolute; pointer-events: none; z-index: 5;
+  font-size: 12px; font-weight: 600; color: rgba(255,255,255,.42);
+  text-shadow: 0 1px 2px rgba(0,0,0,.5); white-space: nowrap;
+  transition: top 1s linear, left 1s linear;
+}
+
+/* --- Test --- */
+.q { margin-bottom: 18px; }
+.q .qtext { font-weight: 700; margin-bottom: 10px; }
+.opt {
+  display: block; width: 100%; text-align: left; border: 2px solid transparent;
+  background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  font-family: inherit; font-size: 15px; cursor: pointer; box-shadow: var(--shadow);
+  transition: border-color .12s ease, background .12s ease;
+}
+.opt.sel { border-color: var(--violet-500); background: #faf8ff; }
+.opt.correct { border-color: var(--lime-400); background: #f4ffe4; }
+.opt.wrong { border-color: #ff9a9a; background: #fff2f2; }
+
+/* --- Support --- */
+textarea {
+  width: 100%; min-height: 120px; border: 2px solid #e7e2f7; border-radius: 14px;
+  padding: 14px; font-family: inherit; font-size: 15px; resize: vertical; background: var(--card);
+}
+textarea:focus { outline: none; border-color: var(--violet-500); }
+
+/* --- Bottom nav --- */
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  height: var(--nav-h);
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: #fff; box-shadow: 0 -4px 20px rgba(46,17,120,.08);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.nav button {
+  border: none; background: none; cursor: pointer; font-family: inherit;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--muted); font-size: 11px; font-weight: 600;
+}
+.nav button .ic { font-size: 20px; line-height: 1; }
+.nav button.active { color: var(--violet-700); }
+.nav button.active .ic { transform: translateY(-1px); }
+
+/* --- States --- */
+.center { min-height: 70vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+.center .big { font-size: 48px; margin-bottom: 14px; }
+.spinner {
+  width: 34px; height: 34px; border: 3px solid var(--violet-300); border-top-color: var(--violet-700);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--nav-h) + 18px); transform: translateX(-50%);
+  background: var(--graphite); color: #fff; padding: 12px 18px; border-radius: 12px;
+  font-size: 14px; font-weight: 600; z-index: 50; box-shadow: var(--shadow);
+  opacity: 0; transition: opacity .2s ease; pointer-events: none; max-width: 90%;
+}
+.toast.show { opacity: 1; }
+
+/* Тёмная тема Telegram — мягкая адаптация фона */
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #17131f; --card: #221b30; --text: #f3f0fb; --muted: #a99fc0; --shadow: 0 6px 24px rgba(0,0,0,.35); }
+  .opt { background: var(--card); }
+  textarea { background: var(--card); color: var(--text); border-color: #3a3350; }
+  .nav { background: #1d1729; }
+  .badge.todo { background: #2c2540; }
+}

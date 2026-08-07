@@ -1,0 +1,104 @@
+"""Клавиатуры бота."""
+from __future__ import annotations
+
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    WebAppInfo,
+)
+
+from ..config import settings
+
+# --- Кнопки-подписи (используются и как фильтры входящих сообщений) ---
+BTN_PAY = "💳 Оплатить доступ"
+BTN_STATUS = "📊 Мой статус"
+BTN_SUPPORT = "❓ Поддержка"
+BTN_OPEN_APP = "🚀 Открыть приложение"
+BTN_CANCEL = "◀️ Отмена"
+
+# Админ-меню
+BTN_A_PAYMENTS = "📥 Заявки"
+BTN_A_USERS = "👥 Ученики"
+BTN_A_CONTENT = "🎬 Контент"
+BTN_A_RESULTS = "📊 Результаты"
+BTN_A_SUPPORT = "✉️ Обращения"
+BTN_A_BROADCAST = "📢 Рассылка"
+
+
+def _webapp_available() -> bool:
+    return settings.MINIAPP_URL.startswith("https://")
+
+
+def student_menu(has_access: bool) -> ReplyKeyboardMarkup:
+    rows: list[list[KeyboardButton]] = []
+    if has_access and _webapp_available():
+        rows.append([KeyboardButton(text=BTN_OPEN_APP, web_app=WebAppInfo(url=settings.MINIAPP_URL))])
+    elif not has_access:
+        rows.append([KeyboardButton(text=BTN_PAY)])
+    rows.append([KeyboardButton(text=BTN_STATUS), KeyboardButton(text=BTN_SUPPORT)])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def open_app_inline() -> InlineKeyboardMarkup | None:
+    """Inline-кнопка запуска мини-аппа (для сообщения «Доступ открыт»)."""
+    if not _webapp_available():
+        return None
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=BTN_OPEN_APP, web_app=WebAppInfo(url=settings.MINIAPP_URL))]]
+    )
+
+
+def cancel_menu() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=BTN_CANCEL)]], resize_keyboard=True
+    )
+
+
+def payment_review(payment_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"pay:approve:{payment_id}"),
+                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"pay:reject:{payment_id}"),
+            ]
+        ]
+    )
+
+
+def user_manage(telegram_id: int, has_access: bool) -> InlineKeyboardMarkup:
+    if has_access:
+        btn = InlineKeyboardButton(text="🔒 Отозвать доступ", callback_data=f"user:revoke:{telegram_id}")
+    else:
+        btn = InlineKeyboardButton(text="🔓 Выдать доступ", callback_data=f"user:grant:{telegram_id}")
+    return InlineKeyboardMarkup(inline_keyboard=[[btn]])
+
+
+def admin_menu() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_A_PAYMENTS), KeyboardButton(text=BTN_A_USERS)],
+            [KeyboardButton(text=BTN_A_CONTENT), KeyboardButton(text=BTN_A_RESULTS)],
+            [KeyboardButton(text=BTN_A_SUPPORT), KeyboardButton(text=BTN_A_BROADCAST)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def content_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Вебинар", callback_data="content:add_video")],
+            [InlineKeyboardButton(text="➕ Тема теории", callback_data="content:add_theory")],
+            [InlineKeyboardButton(text="📋 Список материалов", callback_data="content:list")],
+        ]
+    )
+
+
+def material_toggle(material_id: int, published: bool) -> InlineKeyboardMarkup:
+    if published:
+        btn = InlineKeyboardButton(text="🙈 Снять с публикации", callback_data=f"mat:unpub:{material_id}")
+    else:
+        btn = InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"mat:pub:{material_id}")
+    return InlineKeyboardMarkup(inline_keyboard=[[btn]])

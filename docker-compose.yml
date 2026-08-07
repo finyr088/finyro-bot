@@ -1,0 +1,13 @@
+services:
+  finyro:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      # Сохраняем SQLite-базу между перезапусками контейнера.
+      - ./data:/app/data
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////app/data/finyro.db
+    restart: unless-stopped
