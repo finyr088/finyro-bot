@@ -195,6 +195,64 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 }
 .toast.show { opacity: 1; }
 
+/* ==================== АДМИН-ПАНЕЛЬ ==================== */
+.admin-enter { border-color: var(--lime-500); background: rgba(198,255,78,.15); font-size: 18px; }
+.admin-app { min-height: 100vh; background: var(--graphite); color: #fff; padding-bottom: 24px; }
+.admin-bar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+  background: #0d0d0d; border-bottom: 2px solid var(--lime-500);
+}
+.admin-bar .abrand { font-weight: 800; font-size: 17px; }
+.admin-bar .spacer { flex: 1; }
+.admin-badge {
+  font-size: 11px; font-weight: 800; letter-spacing: 1px;
+  color: var(--graphite); background: var(--lime-500); padding: 3px 8px; border-radius: 6px;
+}
+.admin-exit {
+  background: #242424; color: #fff; border: none; border-radius: 10px;
+  padding: 8px 12px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.atabs {
+  position: sticky; top: 57px; z-index: 10;
+  display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px;
+  background: var(--graphite); -webkit-overflow-scrolling: touch;
+}
+.atabs::-webkit-scrollbar { display: none; }
+.atab {
+  flex: 0 0 auto; border: none; background: #1f1f1f; color: #bdbdbd;
+  font-family: inherit; font-weight: 700; font-size: 13px; padding: 9px 14px;
+  border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.atab.active { background: var(--lime-500); color: var(--graphite); }
+.ascreen { padding: 16px; }
+.acard { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.acard h4 { margin: 0 0 6px; font-size: 15px; color: #fff; }
+.acard p { margin: 0; color: #9a9a9a; font-size: 13px; }
+.astats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }
+.astat { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 14px; padding: 14px 8px; text-align: center; }
+.astat .n { font-size: 24px; font-weight: 800; color: var(--lime-500); }
+.astat .l { font-size: 11px; color: #9a9a9a; margin-top: 3px; }
+.arow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.abtn { border: none; border-radius: 10px; padding: 9px 14px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
+.abtn:active { transform: scale(.97); }
+.abtn.ok { background: var(--lime-500); color: var(--graphite); }
+.abtn.no { background: #3a1f1f; color: #ff9a9a; }
+.abtn.sec { background: #2a2a2a; color: #fff; }
+.abtn.del { background: #2a1414; color: #ff8080; }
+.abtn:disabled { opacity: .55; }
+.ainput, .aarea, .asel {
+  width: 100%; background: #141414; border: 1px solid #333; border-radius: 10px;
+  padding: 11px; color: #fff; font-family: inherit; font-size: 14px; margin-bottom: 10px;
+}
+.ainput:focus, .aarea:focus, .asel:focus { outline: none; border-color: var(--lime-500); }
+.aarea { min-height: 90px; resize: vertical; }
+.apill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.apill.on { background: #1e3a1e; color: var(--lime-400); }
+.apill.off { background: #333; color: #bbb; }
+.aproof { max-width: 100%; border-radius: 10px; margin-top: 10px; display: block; }
+.ahint { color: #7a7a7a; font-size: 12px; }
+
 /* Тёмная тема Telegram — мягкая адаптация фона */
 @media (prefers-color-scheme: dark) {
   :root { --bg: #17131f; --card: #221b30; --text: #f3f0fb; --muted: #a99fc0; --shadow: 0 6px 24px rgba(0,0,0,.35); }

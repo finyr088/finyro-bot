@@ -94,6 +94,7 @@
           <div class="sub">Финансовая грамотность</div>
         </div>
         <div class="spacer"></div>
+        ${state.user.is_admin ? '<button class="avatar admin-enter" id="adminBtn" title="Админ-панель">🛡️</button>' : ""}
         <button class="avatar" id="profileBtn" title="Личный кабинет">${initials}</button>
       </div>
       <div id="screens">
@@ -114,6 +115,8 @@
       b.onclick = () => showTab(b.dataset.tab);
     });
     $("#profileBtn").onclick = showProfile;
+    const ab = $("#adminBtn");
+    if (ab) ab.onclick = openAdmin;
     state._expires = expires;
   }
 
@@ -413,6 +416,353 @@
   function errCard(el, e) {
     if (e.status === 403) { renderLocked(); return; }
     el.innerHTML = `<div class="card"><h3>Ошибка</h3><p>${esc(e.message || "Не удалось загрузить")}</p></div>`;
+  }
+
+  // ==================== АДМИН-ПАНЕЛЬ ====================
+  const A_TABS = [
+    ["overview", "Обзор"], ["payments", "Заявки"], ["students", "Ученики"],
+    ["content", "Контент"], ["tests", "Тесты"], ["support", "Поддержка"],
+    ["broadcast", "Рассылка"], ["results", "Результаты"],
+  ];
+
+  async function authBlob(path) {
+    const res = await fetch("/api" + path, { headers: { Authorization: "Bearer " + state.token } });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return URL.createObjectURL(await res.blob());
+  }
+
+  function openAdmin() {
+    $("#app").className = "admin-app";
+    $("#app").innerHTML = `
+      <div class="admin-bar">
+        <span class="abrand">Финуро</span>
+        <span class="admin-badge">АДМИН</span>
+        <div class="spacer"></div>
+        <button class="admin-exit" id="aexit">← В приложение</button>
+      </div>
+      <div class="atabs" id="atabs">
+        ${A_TABS.map(([k, l]) => `<button class="atab" data-a="${k}">${l}</button>`).join("")}
+      </div>
+      <div class="ascreen" id="ascreen"></div>`;
+    $("#aexit").onclick = () => { $("#app").className = ""; renderShell(); showTab("home"); };
+    document.querySelectorAll(".atab").forEach((b) => (b.onclick = () => adminTab(b.dataset.a)));
+    adminTab("overview");
+  }
+
+  function adminTab(name) {
+    document.querySelectorAll(".atab").forEach((b) => b.classList.toggle("active", b.dataset.a === name));
+    const el = $("#ascreen");
+    ({
+      overview: aOverview, payments: aPayments, students: aStudents, content: aContent,
+      tests: aTests, support: aSupport, broadcast: aBroadcast, results: aResults,
+    })[name](el);
+  }
+
+  const aLoad = (el) => (el.innerHTML = `<div class="center" style="min-height:40vh"><div class="spinner"></div></div>`);
+  const aErr = (el, e) => (el.innerHTML = `<div class="acard"><h4>Ошибка</h4><p>${esc(e.message)}</p></div>`);
+
+  // --- Обзор ---
+  async function aOverview(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/overview");
+      el.innerHTML = `
+        <div class="astats">
+          <div class="astat"><div class="n">${d.total_users}</div><div class="l">Учеников</div></div>
+          <div class="astat"><div class="n">${d.active_users}</div><div class="l">С доступом</div></div>
+          <div class="astat"><div class="n">${d.pending}</div><div class="l">Заявок</div></div>
+          <div class="astat"><div class="n">${d.materials}</div><div class="l">Материалов</div></div>
+          <div class="astat"><div class="n">${d.tests}</div><div class="l">Тестов</div></div>
+          <div class="astat"><div class="n">${d.attempts}</div><div class="l">Попыток</div></div>
+        </div>
+        ${d.pending > 0 ? `<div class="acard"><h4>🔔 Есть новые заявки на оплату</h4><p>Откройте вкладку «Заявки», чтобы подтвердить доступ.</p></div>` : ""}`;
+    } catch (e) { aErr(el, e); }
+  }
+
+  // --- Заявки ---
+  async function aPayments(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/payments");
+      if (!d.payments.length) { el.innerHTML = `<div class="acard"><p>Заявок на проверке нет ✅</p></div>`; return; }
+      el.innerHTML = d.payments.map((p) => `
+        <div class="acard" data-pid="${p.id}">
+          <h4>${esc(p.name)}</h4>
+          <p>ID: ${p.telegram_id} · ${new Date(p.created_at).toLocaleString("ru-RU")}</p>
+          <div class="arow">
+            ${p.has_proof ? `<button class="abtn sec" data-proof="${p.id}">🖼 Скриншот</button>` : ""}
+            <button class="abtn ok" data-ok="${p.id}">✅ Подтвердить</button>
+            <button class="abtn no" data-no="${p.id}">❌ Отклонить</button>
+          </div>
+          <div class="proofbox"></div>
+        </div>`).join("");
+      el.querySelectorAll("[data-proof]").forEach((b) => (b.onclick = async () => {
+        const box = b.closest(".acard").querySelector(".proofbox");
+        box.innerHTML = `<p class="ahint">Загрузка…</p>`;
+        try { box.innerHTML = `<img class="aproof" src="${await authBlob("/admin/payments/" + b.dataset.proof + "/proof")}">`; }
+        catch (e) { box.innerHTML = `<p class="ahint">Не удалось загрузить: ${esc(e.message)}</p>`; }
+      }));
+      const act = (id, action) => async () => {
+        try { await api("/admin/payments/" + id + "/" + action, { method: "POST" }); toast(action === "approve" ? "Доступ выдан ✅" : "Отклонено"); aPayments(el); }
+        catch (e) { toast(e.message); }
+      };
+      el.querySelectorAll("[data-ok]").forEach((b) => (b.onclick = act(b.dataset.ok, "approve")));
+      el.querySelectorAll("[data-no]").forEach((b) => (b.onclick = act(b.dataset.no, "reject")));
+    } catch (e) { aErr(el, e); }
+  }
+
+  // --- Ученики ---
+  async function aStudents(el) {
+    el.innerHTML = `<input class="ainput" id="ssearch" placeholder="Поиск по имени или ID…"><div id="slist"></div>`;
+    const box = $("#slist", el);
+    const load = async (q) => {
+      aLoad(box);
+      try {
+        const d = await api("/admin/students" + (q ? "?q=" + encodeURIComponent(q) : ""));
+        if (!d.students.length) { box.innerHTML = `<div class="acard"><p>Ничего не найдено.</p></div>`; return; }
+        box.innerHTML = d.students.map((u) => `
+          <div class="acard">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="flex:1"><h4>${esc(u.name)}</h4><p>ID: ${u.telegram_id}</p></div>
+              <span class="apill ${u.has_access ? "on" : "off"}">${u.has_access ? "доступ" : "нет"}</span>
+            </div>
+            <div class="arow">
+              ${u.has_access
+                ? `<button class="abtn no" data-rev="${u.telegram_id}">Отозвать</button>`
+                : `<button class="abtn ok" data-grant="${u.telegram_id}">Выдать доступ</button>`}
+            </div>
+          </div>`).join("");
+        const act = (tg, action) => async () => {
+          try { await api("/admin/students/" + tg + "/" + action, { method: "POST" }); toast("Готово"); load($("#ssearch", el).value.trim()); }
+          catch (e) { toast(e.message); }
+        };
+        box.querySelectorAll("[data-grant]").forEach((b) => (b.onclick = act(b.dataset.grant, "grant")));
+        box.querySelectorAll("[data-rev]").forEach((b) => (b.onclick = act(b.dataset.rev, "revoke")));
+      } catch (e) { aErr(box, e); }
+    };
+    let t;
+    $("#ssearch", el).oninput = (ev) => { clearTimeout(t); t = setTimeout(() => load(ev.target.value.trim()), 350); };
+    load("");
+  }
+
+  // --- Контент ---
+  async function aContent(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/materials");
+      el.innerHTML = `
+        <button class="abtn ok" id="addmat" style="margin-bottom:14px">➕ Добавить материал</button>
+        <div id="matform"></div>
+        <div id="matlist">${d.materials.map(matCard).join("") || '<div class="acard"><p>Материалов пока нет.</p></div>'}</div>`;
+      $("#addmat", el).onclick = () => renderMatForm($("#matform", el), el);
+      wireMatList(el);
+    } catch (e) { aErr(el, e); }
+  }
+
+  const matCard = (m) => `
+    <div class="acard" data-mid="${m.id}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1"><h4>${m.kind === "video" ? "🎬" : "📚"} ${esc(m.title)}</h4>
+        <p>${m.kind === "video" ? "Вебинар" : "Теория"}</p></div>
+        <span class="apill ${m.status === "published" ? "on" : "off"}">${m.status === "published" ? "опубл." : m.status}</span>
+      </div>
+      <div class="arow">
+        ${m.status === "published"
+          ? `<button class="abtn sec" data-unpub="${m.id}">Снять</button>`
+          : `<button class="abtn ok" data-pub="${m.id}">Опубликовать</button>`}
+        <button class="abtn del" data-delmat="${m.id}">Удалить</button>
+      </div>
+    </div>`;
+
+  function wireMatList(el) {
+    const act = (id, action) => async () => {
+      try { await api("/admin/materials/" + id + "/" + action, { method: "POST" }); toast("Готово"); aContent(el); }
+      catch (e) { toast(e.message); }
+    };
+    el.querySelectorAll("[data-pub]").forEach((b) => (b.onclick = act(b.dataset.pub, "publish")));
+    el.querySelectorAll("[data-unpub]").forEach((b) => (b.onclick = act(b.dataset.unpub, "unpublish")));
+    el.querySelectorAll("[data-delmat]").forEach((b) => (b.onclick = async () => {
+      if (!confirm("Удалить материал?")) return;
+      try { await api("/admin/materials/" + b.dataset.delmat, { method: "DELETE" }); toast("Удалено"); aContent(el); }
+      catch (e) { toast(e.message); }
+    }));
+  }
+
+  function renderMatForm(box, el) {
+    box.innerHTML = `
+      <div class="acard">
+        <select class="asel" id="mkind">
+          <option value="video">🎬 Вебинар (видео)</option>
+          <option value="theory">📚 Тема теории</option>
+        </select>
+        <input class="ainput" id="mtitle" placeholder="Название">
+        <input class="ainput" id="murl" placeholder="Ссылка на видео (HLS .m3u8 или mp4)">
+        <textarea class="aarea" id="mdesc" placeholder="Описание (для видео) или текст темы (для теории)"></textarea>
+        <div class="arow">
+          <button class="abtn ok" id="msave">Создать (черновик)</button>
+          <button class="abtn sec" id="mcancel">Отмена</button>
+        </div>
+        <p class="ahint">Материал создаётся черновиком — потом нажмите «Опубликовать».</p>
+      </div>`;
+    const kind = $("#mkind", box);
+    const url = $("#murl", box);
+    const toggle = () => { url.style.display = kind.value === "video" ? "block" : "none"; };
+    kind.onchange = toggle; toggle();
+    $("#mcancel", box).onclick = () => (box.innerHTML = "");
+    $("#msave", box).onclick = async () => {
+      const k = kind.value;
+      const title = $("#mtitle", box).value.trim();
+      const text = $("#mdesc", box).value.trim();
+      if (!title) { toast("Введите название"); return; }
+      const body = k === "video"
+        ? { kind: "video", title, stream_url: url.value.trim(), description: text }
+        : { kind: "theory", title, content: text };
+      try { await api("/admin/materials", { method: "POST", body }); toast("Создано ✅"); aContent(el); }
+      catch (e) { toast(e.message); }
+    };
+  }
+
+  // --- Тесты ---
+  async function aTests(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/tests");
+      el.innerHTML = `
+        <button class="abtn ok" id="addtest" style="margin-bottom:14px">➕ Создать тест</button>
+        <div id="testform"></div>
+        <div id="testlist">${d.tests.map((t) => `
+          <div class="acard">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="flex:1"><h4>${esc(t.title)}</h4><p>${t.questions} вопр. · ${t.status}</p></div>
+              <button class="abtn del" data-deltest="${t.id}">Удалить</button>
+            </div>
+          </div>`).join("") || '<div class="acard"><p>Тестов пока нет.</p></div>'}</div>`;
+      $("#addtest", el).onclick = () => renderTestForm($("#testform", el), el);
+      el.querySelectorAll("[data-deltest]").forEach((b) => (b.onclick = async () => {
+        if (!confirm("Удалить тест?")) return;
+        try { await api("/admin/tests/" + b.dataset.deltest, { method: "DELETE" }); toast("Удалено"); aTests(el); }
+        catch (e) { toast(e.message); }
+      }));
+    } catch (e) { aErr(el, e); }
+  }
+
+  function renderTestForm(box, el) {
+    const qs = [];
+    box.innerHTML = `
+      <div class="acard">
+        <input class="ainput" id="ttitle" placeholder="Название теста">
+        <input class="ainput" id="tdesc" placeholder="Описание (необязательно)">
+        <div id="qbox"></div>
+        <div class="arow">
+          <button class="abtn sec" id="addq">＋ Вопрос</button>
+          <button class="abtn ok" id="tsave">Сохранить тест</button>
+          <button class="abtn sec" id="tcancel">Отмена</button>
+        </div>
+        <p class="ahint">Отметьте кружком правильный вариант в каждом вопросе.</p>
+      </div>`;
+    const qbox = $("#qbox", box);
+    const addQ = () => {
+      const qi = qs.length;
+      qs.push(true);
+      const div = document.createElement("div");
+      div.style.cssText = "border-top:1px solid #2a2a2a;padding-top:10px;margin-top:6px";
+      div.innerHTML = `
+        <input class="ainput q-text" placeholder="Вопрос ${qi + 1}">
+        ${[0, 1, 2, 3].map((oi) => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <input type="radio" name="correct${qi}" value="${oi}" ${oi === 0 ? "checked" : ""}>
+            <input class="ainput q-opt" data-oi="${oi}" placeholder="Вариант ${oi + 1}${oi > 1 ? " (необяз.)" : ""}" style="margin:0">
+          </div>`).join("")}`;
+      div.dataset.qi = qi;
+      qbox.appendChild(div);
+    };
+    $("#addq", box).onclick = addQ; addQ();
+    $("#tcancel", box).onclick = () => (box.innerHTML = "");
+    $("#tsave", box).onclick = async () => {
+      const title = $("#ttitle", box).value.trim();
+      if (!title) { toast("Введите название теста"); return; }
+      const questions = [];
+      qbox.querySelectorAll("[data-qi]").forEach((div) => {
+        const text = div.querySelector(".q-text").value.trim();
+        const opts = [...div.querySelectorAll(".q-opt")].map((i) => i.value.trim()).filter(Boolean);
+        const correctEl = div.querySelector("input[type=radio]:checked");
+        const correct = correctEl ? +correctEl.value : 0;
+        if (text && opts.length >= 2) questions.push({ text, options: opts, correct_index: Math.min(correct, opts.length - 1) });
+      });
+      if (!questions.length) { toast("Добавьте хотя бы один вопрос с 2+ вариантами"); return; }
+      try {
+        await api("/admin/tests", { method: "POST", body: { title, description: $("#tdesc", box).value.trim(), questions } });
+        toast("Тест создан ✅"); aTests(el);
+      } catch (e) { toast(e.message); }
+    };
+  }
+
+  // --- Поддержка ---
+  async function aSupport(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/support");
+      if (!d.messages.length) { el.innerHTML = `<div class="acard"><p>Обращений пока нет.</p></div>`; return; }
+      el.innerHTML = d.messages.map((m) => `
+        <div class="acard">
+          <h4>${m.from_admin ? "↩️ Вы → " : ""}${esc(m.name)} <span class="ahint">${new Date(m.created_at).toLocaleString("ru-RU")}</span></h4>
+          <p style="color:#ddd">${esc(m.text)}</p>
+          ${!m.from_admin && m.telegram_id ? `
+            <div style="margin-top:10px">
+              <input class="ainput rtext" placeholder="Ответить ученику…" style="margin-bottom:8px">
+              <button class="abtn ok" data-reply="${m.telegram_id}">Отправить ответ</button>
+            </div>` : ""}
+        </div>`).join("");
+      el.querySelectorAll("[data-reply]").forEach((b) => (b.onclick = async () => {
+        const inp = b.closest(".acard").querySelector(".rtext");
+        const text = inp.value.trim();
+        if (!text) { toast("Введите ответ"); return; }
+        try { await api("/admin/support/" + b.dataset.reply + "/reply", { method: "POST", body: { text } }); toast("Отправлено ✅"); inp.value = ""; }
+        catch (e) { toast(e.message); }
+      }));
+    } catch (e) { aErr(el, e); }
+  }
+
+  // --- Рассылка ---
+  function aBroadcast(el) {
+    el.innerHTML = `
+      <div class="acard">
+        <h4>Рассылка</h4>
+        <p class="ahint">Сообщение придёт ученикам в бот Финуро.</p>
+        <textarea class="aarea" id="btext" placeholder="Текст рассылки…"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;color:#bbb;font-size:13px;margin-bottom:10px">
+          <input type="checkbox" id="bactive" checked> только с активным доступом
+        </label>
+        <button class="abtn ok" id="bsend">Отправить</button>
+      </div>`;
+    $("#bsend", el).onclick = async () => {
+      const text = $("#btext", el).value.trim();
+      if (!text) { toast("Введите текст"); return; }
+      if (!confirm("Отправить рассылку?")) return;
+      $("#bsend", el).disabled = true;
+      try {
+        const r = await api("/admin/broadcast", { method: "POST", body: { text, only_active: $("#bactive", el).checked } });
+        toast(`Доставлено ${r.sent} из ${r.total}`);
+        $("#btext", el).value = "";
+      } catch (e) { toast(e.message); }
+      finally { $("#bsend", el).disabled = false; }
+    };
+  }
+
+  // --- Результаты ---
+  async function aResults(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/results");
+      if (!d.results.length) { el.innerHTML = `<div class="acard"><p>Результатов пока нет.</p></div>`; return; }
+      el.innerHTML = d.results.map((r) => `
+        <div class="acard">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1"><h4>${esc(r.name)}</h4><p>${esc(r.test)}</p></div>
+            <span class="apill ${r.percent >= 60 ? "on" : "off"}">${r.score}/${r.total} · ${r.percent}%</span>
+          </div>
+        </div>`).join("");
+    } catch (e) { aErr(el, e); }
   }
 
   boot();

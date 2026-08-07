@@ -19,7 +19,7 @@ from ..models import (
     utcnow,
 )
 from ..security import AuthError, create_token, validate_init_data
-from .deps import get_current_user, require_access
+from .deps import effective_access, get_current_user, require_access
 
 router = APIRouter(prefix="/api")
 
@@ -44,7 +44,8 @@ def _user_public(user: User) -> dict:
         "telegram_id": user.telegram_id,
         "name": user.full_name,
         "username": user.username,
-        "has_access": user.has_access(),
+        "has_access": effective_access(user),
+        "is_admin": settings.is_admin(user.telegram_id),
         "access_expires_at": user.access_expires_at.isoformat() if user.access_expires_at else None,
     }
 

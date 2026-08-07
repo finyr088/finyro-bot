@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import BASE_DIR, settings
 from .db import init_db
 from .api.routes import router as api_router
+from .api.admin import router as admin_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -106,6 +107,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(admin_router)
 
 
 @app.get("/healthz")
