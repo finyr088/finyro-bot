@@ -126,11 +126,15 @@ async def get_video(
     await services.touch_opened(session, user.id, mat.id)
     await session.commit()
     watched = await services.get_progress(session, user.id, mat.id)
+    # Загруженные файлы отдаём по внутреннему пути /media/<файл>; внешние ссылки — как есть.
+    stream_url = mat.stream_url or ""
+    if stream_url.startswith("upload:"):
+        stream_url = "/media/" + stream_url[len("upload:"):]
     return {
         "id": mat.id,
         "title": mat.title,
         "description": mat.description,
-        "stream_url": mat.stream_url,
+        "stream_url": stream_url,
         "watched": bool(watched and watched.watched),
         # Данные для динамического водяного знака поверх видео
         "watermark": f"{user.full_name} · id{user.telegram_id}",

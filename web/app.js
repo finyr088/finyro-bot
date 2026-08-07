@@ -431,6 +431,18 @@
     return URL.createObjectURL(await res.blob());
   }
 
+  async function apiForm(path, formData) {
+    const res = await fetch("/api" + path, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + state.token }, // Content-Type ставит браузер сам
+      body: formData,
+    });
+    let d = null;
+    try { d = await res.json(); } catch (_) {}
+    if (!res.ok) throw new Error((d && d.detail) || "Ошибка загрузки (" + res.status + ")");
+    return d;
+  }
+
   function openAdmin() {
     $("#app").className = "admin-app";
     $("#app").innerHTML = `
@@ -596,17 +608,22 @@
           <option value="theory">📚 Тема теории</option>
         </select>
         <input class="ainput" id="mtitle" placeholder="Название">
-        <input class="ainput" id="murl" placeholder="Ссылка на видео (HLS .m3u8 или mp4)">
+        <div id="videofields">
+          <p class="ahint" style="margin:0 0 6px">Загрузите файл MP4:</p>
+          <input class="ainput" type="file" id="mfile" accept="video/mp4,video/quicktime,video/*">
+          <p class="ahint" style="margin:-2px 0 6px">— или вставьте ссылку на поток —</p>
+          <input class="ainput" id="murl" placeholder="Ссылка HLS .m3u8 / mp4 (необязательно)">
+        </div>
         <textarea class="aarea" id="mdesc" placeholder="Описание (для видео) или текст темы (для теории)"></textarea>
         <div class="arow">
           <button class="abtn ok" id="msave">Создать (черновик)</button>
           <button class="abtn sec" id="mcancel">Отмена</button>
         </div>
-        <p class="ahint">Материал создаётся черновиком — потом нажмите «Опубликовать».</p>
+        <p class="ahint" id="upstatus">Материал создаётся черновиком — потом нажмите «Опубликовать».</p>
       </div>`;
     const kind = $("#mkind", box);
-    const url = $("#murl", box);
-    const toggle = () => { url.style.display = kind.value === "video" ? "block" : "none"; };
+    const vf = $("#videofields", box);
+    const toggle = () => { vf.style.display = kind.value === "video" ? "block" : "none"; };
     kind.onchange = toggle; toggle();
     $("#mcancel", box).onclick = () => (box.innerHTML = "");
     $("#msave", box).onclick = async () => {
@@ -614,11 +631,33 @@
       const title = $("#mtitle", box).value.trim();
       const text = $("#mdesc", box).value.trim();
       if (!title) { toast("Введите название"); return; }
-      const body = k === "video"
-        ? { kind: "video", title, stream_url: url.value.trim(), description: text }
-        : { kind: "theory", title, content: text };
-      try { await api("/admin/materials", { method: "POST", body }); toast("Создано ✅"); aContent(el); }
-      catch (e) { toast(e.message); }
+
+      if (k === "theory") {
+        try { await api("/admin/materials", { method: "POST", body: { kind: "theory", title, content: text } }); toast("Создано ✅"); aContent(el); }
+        catch (e) { toast(e.message); }
+        return;
+      }
+
+      // Видео: приоритет — загруженный файл; иначе ссылка.
+      const file = $("#mfile", box).files[0];
+      const url = $("#murl", box).value.trim();
+      const save = $("#msave", box), status = $("#upstatus", box);
+      if (file) {
+        const fd = new FormData();
+        fd.append("title", title); fd.append("description", text); fd.append("file", file);
+        save.disabled = true;
+        status.textContent = "⏳ Загрузка видео… не закрывайте окно (может занять время)";
+        try {
+          const r = await apiForm("/admin/materials/upload", fd);
+          toast(`Видео загружено (${r.size_mb} МБ) ✅`);
+          aContent(el);
+        } catch (e) { toast(e.message); save.disabled = false; status.textContent = ""; }
+      } else if (url) {
+        try { await api("/admin/materials", { method: "POST", body: { kind: "video", title, stream_url: url, description: text } }); toast("Создано ✅"); aContent(el); }
+        catch (e) { toast(e.message); }
+      } else {
+        toast("Загрузите файл MP4 или вставьте ссылку");
+      }
     };
   }
 

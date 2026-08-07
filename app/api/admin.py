@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 import logging
+import os
+import uuid
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+from ..config import settings
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -206,6 +211,62 @@ async def create_material(body: MaterialIn, session: AsyncSession = Depends(get_
     return {"ok": True, "id": m.id}
 
 
+_VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm"}
+
+
+@router.post("/materials/upload")
+async def upload_video(
+    title: str = Form(...),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+):
+    """Загрузка видеофайла вебинара. Сохраняется на диск, создаётся черновик."""
+    if not title.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Введите название")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _VIDEO_EXT:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Разрешены видео: mp4, mov, m4v, webm")
+
+    media_dir = Path(settings.MEDIA_DIR)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    fname = uuid.uuid4().hex + ext
+    dest = media_dir / fname
+    max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+    written = 0
+    try:
+        with open(dest, "wb") as out:
+            while True:
+                chunk = await file.read(1024 * 1024)  # по 1 МБ, чтобы не грузить память
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    raise HTTPException(
+                        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        f"Файл больше {settings.MAX_UPLOAD_MB} МБ",
+                    )
+                out.write(chunk)
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
+    except Exception as exc:  # noqa: BLE001
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Ошибка сохранения: {exc}")
+
+    order = (await session.scalar(
+        select(func.max(Material.order_index)).where(Material.kind == MaterialKind.VIDEO)
+    ) or 0) + 1
+    m = Material(
+        kind=MaterialKind.VIDEO, title=title.strip(),
+        description=description.strip() or None,
+        stream_url=f"upload:{fname}", status=MaterialStatus.DRAFT, order_index=order,
+    )
+    session.add(m)
+    await session.commit()
+    return {"ok": True, "id": m.id, "size_mb": round(written / 1024 / 1024, 1)}
+
+
 @router.post("/materials/{material_id}/{action}")
 async def toggle_material(material_id: int, action: str, session: AsyncSession = Depends(get_session)):
     m = await session.get(Material, material_id)
@@ -226,6 +287,9 @@ async def delete_material(material_id: int, session: AsyncSession = Depends(get_
     m = await session.get(Material, material_id)
     if m is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Материал не найден")
+    # Удаляем загруженный видеофайл, если был.
+    if m.stream_url and m.stream_url.startswith("upload:"):
+        (Path(settings.MEDIA_DIR) / m.stream_url[len("upload:"):]).unlink(missing_ok=True)
     await session.delete(m)
     await session.commit()
     return {"ok": True}

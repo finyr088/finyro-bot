@@ -22,6 +22,8 @@ logging.basicConfig(
 log = logging.getLogger("finyro")
 
 WEB_DIR = BASE_DIR / "web"
+MEDIA_DIR = Path(settings.MEDIA_DIR)
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 _bot_task: asyncio.Task | None = None
 _db_ready = asyncio.Event()
@@ -115,6 +117,9 @@ async def healthz():
     return {"status": "ok", "bot": settings.bot_configured}
 
 
-# Статика мини-приложения. Монтируется последней — /api/* и /healthz имеют приоритет.
+# Загруженные видео (с поддержкой Range-запросов для перемотки).
+app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
+
+# Статика мини-приложения. Монтируется последней — /api/*, /media/* имеют приоритет.
 if WEB_DIR.exists():
     app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")

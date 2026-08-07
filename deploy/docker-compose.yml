@@ -10,8 +10,9 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     environment:
-      # База хранится в томе — переживает пересборки/перезапуски.
+      # База и загруженные видео хранятся в томе — переживают пересборки/перезапуски.
       DATABASE_URL: sqlite+aiosqlite:////data/finyro.db
+      MEDIA_DIR: /data/media
     volumes:
       - appdata:/data
     expose:

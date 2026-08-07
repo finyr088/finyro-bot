@@ -86,6 +86,10 @@ class Settings:
     # Срок доступа в днях после подтверждения. 0 = бессрочно.
     ACCESS_DAYS: int = _get_int("ACCESS_DAYS", 0)
 
+    # Папка для загруженных видео и лимит размера одного файла (МБ).
+    MEDIA_DIR: str = _get("MEDIA_DIR", str(BASE_DIR / "media"))
+    MAX_UPLOAD_MB: int = _get_int("MAX_UPLOAD_MB", 800)
+
     # --- Режим разработки ---
     # В DEV_MODE мини-апп можно открыть в обычном браузере без Telegram:
     # авторизация подставляет тестового пользователя (см. security.py).
