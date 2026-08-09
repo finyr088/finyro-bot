@@ -54,6 +54,10 @@ class Settings:
     ADMIN_IDS: list[int] = [
         int(x) for x in _get("ADMIN_IDS", "").replace(" ", "").split(",") if x
     ]
+    # Базовый URL Telegram Bot API. Пусто = api.telegram.org напрямую.
+    # Если датацентр плохо достукивается до Telegram, указываем сюда адрес
+    # прокси (например, Cloudflare Worker), проксирующего api.telegram.org.
+    TELEGRAM_API_URL: str = _get("TELEGRAM_API_URL", "")
 
     # --- Веб / API ---
     HOST: str = _get("HOST", "0.0.0.0")
