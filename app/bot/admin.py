@@ -120,7 +120,7 @@ async def review_payment(call: CallbackQuery) -> None:
             user = await services.approve_payment(session, payment, call.from_user.id)
             await session.commit()
             await send_to_user(user.telegram_id, texts.ACCESS_GRANTED, reply_markup=kb.open_app_inline())
-            await send_to_user(user.telegram_id, "Меню обновлено.", reply_markup=kb.student_menu(True))
+            await send_to_user(user.telegram_id, texts.main_menu_text(user.full_name, True), reply_markup=kb.main_menu_inline(True))
             result = f"✅ Оплата подтверждена, доступ выдан ({user.full_name})"
         else:
             user = await services.reject_payment(session, payment, call.from_user.id)
@@ -167,12 +167,12 @@ async def manage_user(call: CallbackQuery) -> None:
             await services.grant_access(session, user, call.from_user.id)
             await session.commit()
             await send_to_user(user.telegram_id, texts.ACCESS_GRANTED, reply_markup=kb.open_app_inline())
-            await send_to_user(user.telegram_id, "Меню обновлено.", reply_markup=kb.student_menu(True))
+            await send_to_user(user.telegram_id, texts.main_menu_text(user.full_name, True), reply_markup=kb.main_menu_inline(True))
             note = "🔓 Доступ выдан"
         else:
             await services.revoke_access(session, user, call.from_user.id)
             await session.commit()
-            await send_to_user(user.telegram_id, texts.ACCESS_REVOKED, reply_markup=kb.student_menu(False))
+            await send_to_user(user.telegram_id, texts.ACCESS_REVOKED, reply_markup=kb.main_menu_inline(False))
             note = "🔒 Доступ отозван"
         has_access = user.has_access()
     await call.answer(note)

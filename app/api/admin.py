@@ -139,7 +139,7 @@ async def review_payment(payment_id: int, action: str, admin: User = Depends(req
         user = await services.approve_payment(session, p, admin.telegram_id)
         await session.commit()
         await send_to_user(user.telegram_id, bot_texts.ACCESS_GRANTED, reply_markup=bot_kb.open_app_inline())
-        await send_to_user(user.telegram_id, "Меню обновлено.", reply_markup=bot_kb.student_menu(True))
+        await send_to_user(user.telegram_id, bot_texts.main_menu_text(user.full_name, True), reply_markup=bot_kb.main_menu_inline(True))
     else:
         user = await services.reject_payment(session, p, admin.telegram_id)
         await session.commit()
@@ -176,11 +176,11 @@ async def manage_student(telegram_id: int, action: str, admin: User = Depends(re
         await services.grant_access(session, user, admin.telegram_id)
         await session.commit()
         await send_to_user(user.telegram_id, bot_texts.ACCESS_GRANTED, reply_markup=bot_kb.open_app_inline())
-        await send_to_user(user.telegram_id, "Меню обновлено.", reply_markup=bot_kb.student_menu(True))
+        await send_to_user(user.telegram_id, bot_texts.main_menu_text(user.full_name, True), reply_markup=bot_kb.main_menu_inline(True))
     else:
         await services.revoke_access(session, user, admin.telegram_id)
         await session.commit()
-        await send_to_user(user.telegram_id, bot_texts.ACCESS_REVOKED, reply_markup=bot_kb.student_menu(False))
+        await send_to_user(user.telegram_id, bot_texts.ACCESS_REVOKED, reply_markup=bot_kb.main_menu_inline(False))
     return {"ok": True, "has_access": user.has_access()}
 
 

@@ -56,6 +56,42 @@ def cancel_menu() -> ReplyKeyboardMarkup:
     )
 
 
+def main_menu_inline(has_access: bool) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if has_access and _webapp_available():
+        rows.append([InlineKeyboardButton(text="🚀 Открыть приложение", web_app=WebAppInfo(url=settings.MINIAPP_URL))])
+    rows.append([
+        InlineKeyboardButton(text="🎓 О курсе", callback_data="menu:about"),
+        InlineKeyboardButton(text="❓ Как учиться", callback_data="menu:how"),
+    ])
+    if not has_access:
+        rows.append([InlineKeyboardButton(text="💳 Оплатить доступ", callback_data="menu:pay")])
+    rows.append([
+        InlineKeyboardButton(text="📊 Мой статус", callback_data="menu:status"),
+        InlineKeyboardButton(text="💬 Поддержка", callback_data="menu:support"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def back_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")]]
+    )
+
+
+def payment_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 Отправить чек оплаты", callback_data="pay:send")],
+        [InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")],
+    ])
+
+
+def cancel_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="◀️ Отмена", callback_data="nav:cancel")]]
+    )
+
+
 def payment_review(payment_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
