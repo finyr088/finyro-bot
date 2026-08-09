@@ -1,6 +1,8 @@
 """Синглтоны Bot и Dispatcher. Бот создаётся только если задан валидный BOT_TOKEN."""
 from __future__ import annotations
 
+import socket
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -31,6 +33,12 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
             session = AiohttpSession()
         try:
             session.timeout = 30
+        except Exception:  # noqa: BLE001
+            pass
+        # Форсим IPv4: в Docker-сети нет IPv6-маршрута, а api.telegram.org имеет
+        # IPv6-адрес → без этого соединение падает с «Network is unreachable».
+        try:
+            session._connector_init["family"] = socket.AF_INET
         except Exception:  # noqa: BLE001
             pass
         _bot = Bot(
