@@ -5,6 +5,15 @@
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const state = { token: null, user: null, tab: "cabinet" };
 
+  // Логотип «монета роста» — чистая марка без подложки (лайм на прозрачном).
+  const LOGO_MARK = `
+    <svg class="logo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Финуро">
+      <circle cx="20" cy="20" r="16.5" stroke="#C6FF4E" stroke-width="2.5"/>
+      <rect x="11.5" y="21" width="4.6" height="8" rx="1.6" fill="#C6FF4E"/>
+      <rect x="17.7" y="16" width="4.6" height="13" rx="1.6" fill="#C6FF4E"/>
+      <rect x="23.9" y="11" width="4.6" height="18" rx="1.6" fill="#C6FF4E"/>
+    </svg>`;
+
   // --- Утилиты ---
   const $ = (sel, root = document) => root.querySelector(sel);
   const esc = (s) =>
@@ -87,16 +96,18 @@
       : "бессрочно";
     const initials = (firstName(state.user.name)[0] || "?").toUpperCase();
     $("#app").innerHTML = `
-      <div class="appbar">
-        <img src="logo.svg" alt="Финуро" />
-        <div>
-          <div class="brand">Финуро</div>
-          <div class="sub">Финансовая грамотность</div>
+      <header class="appbar">
+        <div class="bar-inner">
+          ${LOGO_MARK}
+          <div class="brand-box">
+            <div class="brand">Финуро</div>
+            <div class="sub">Финансовая грамотность</div>
+          </div>
+          <div class="spacer"></div>
+          ${state.user.is_admin ? '<button class="icon-btn admin-enter" id="adminBtn" title="Админ-панель">🛡️</button>' : ""}
+          <button class="avatar" id="profileBtn" title="Личный кабинет">${initials}</button>
         </div>
-        <div class="spacer"></div>
-        ${state.user.is_admin ? '<button class="avatar admin-enter" id="adminBtn" title="Админ-панель">🛡️</button>' : ""}
-        <button class="avatar" id="profileBtn" title="Личный кабинет">${initials}</button>
-      </div>
+      </header>
       <div id="screens">
         <div class="screen" id="screen-home"></div>
         <div class="screen" id="screen-videos"></div>
@@ -106,10 +117,12 @@
         <div class="screen" id="screen-detail"></div>
       </div>
       <nav class="nav">
-        ${navBtn("home", "🏠", "Главная")}
-        ${navBtn("videos", "🎬", "Вебинары")}
-        ${navBtn("tests", "📝", "Тесты")}
-        ${navBtn("theory", "📚", "Теория")}
+        <div class="nav-inner">
+          ${navBtn("home", "🏠", "Главная")}
+          ${navBtn("videos", "🎬", "Вебинары")}
+          ${navBtn("tests", "📝", "Тесты")}
+          ${navBtn("theory", "📚", "Теория")}
+        </div>
       </nav>`;
     document.querySelectorAll(".nav button").forEach((b) => {
       b.onclick = () => showTab(b.dataset.tab);

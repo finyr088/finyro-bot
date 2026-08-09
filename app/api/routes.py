@@ -76,7 +76,7 @@ async def auth_telegram(body: AuthRequest, session: AsyncSession = Depends(get_s
 @router.get("/me")
 async def me(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     summary = await services.progress_summary(session, user)
-    cont = await services.continue_video(session, user) if user.has_access() else None
+    cont = await services.continue_video(session, user) if effective_access(user) else None
     return {
         "user": _user_public(user),
         "progress": summary,
