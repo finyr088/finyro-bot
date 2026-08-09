@@ -6,6 +6,7 @@
   --violet-300: #A98BF5;
   --lime-500: #C6FF4E;
   --lime-400: #A6F03F;
+  --lime-300: #8DE04A;
   --lavender: #F1EDFF;
   --graphite: #141414;
 
@@ -23,10 +24,12 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+html, body, button, input, textarea, select, .btn, .abtn, .opt, .atab, .back {
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
 html, body {
   margin: 0; padding: 0;
   background: var(--bg); color: var(--text);
-  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased;
 }
 
@@ -50,12 +53,13 @@ html, body {
 .spacer { flex: 1; }
 
 .avatar {
-  width: 42px; height: 42px; border-radius: 50%; flex: 0 0 42px;
+  width: 42px; height: 42px; border-radius: 50%; flex: 0 0 42px; overflow: hidden;
   border: 2.5px solid var(--lime-500); background: var(--violet-700); color: #fff;
-  font-family: inherit; font-weight: 800; font-size: 17px; cursor: pointer;
+  font-weight: 800; font-size: 17px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: transform .12s ease;
 }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
 .avatar:active { transform: scale(.93); }
 .icon-btn {
   width: 42px; height: 42px; border-radius: 14px; flex: 0 0 42px;
@@ -116,8 +120,9 @@ h2.section {
 .continue-card .thumb {
   width: 58px; height: 58px; flex: 0 0 58px; border-radius: 16px;
   background: var(--violet-500); color: #fff;
-  display: flex; align-items: center; justify-content: center; font-size: 26px;
+  display: flex; align-items: center; justify-content: center;
 }
+.continue-card .thumb svg { width: 28px; height: 28px; }
 .continue-card .play {
   width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%;
   background: var(--lime-500); color: var(--violet-900); font-size: 15px;
@@ -131,13 +136,12 @@ h2.section {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; border: none; cursor: pointer;
   font-family: inherit; font-weight: 800; font-size: 15.5px; letter-spacing: .2px;
-  padding: 16px 18px; border-radius: 16px;
+  padding: 16px 18px; border-radius: 16px; margin-top: 4px;
   background: var(--lime-500); color: var(--violet-900);
-  box-shadow: 0 6px 16px rgba(198,255,78,.35);
-  transition: transform .12s ease, box-shadow .12s ease;
+  transition: transform .12s ease, filter .12s ease;
 }
-.btn:active { transform: scale(.98); box-shadow: 0 3px 10px rgba(198,255,78,.3); }
-.btn:disabled { opacity: .55; box-shadow: none; }
+.btn:active { transform: scale(.98); filter: brightness(.97); }
+.btn:disabled { opacity: .55; }
 .btn.secondary { background: #fff; color: var(--violet-500); box-shadow: var(--shadow-sm); }
 .btn.ghost { background: transparent; color: var(--violet-500); box-shadow: none; }
 
@@ -191,7 +195,8 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
   color: var(--muted); font-size: 11px; font-weight: 700; position: relative;
   transition: color .15s ease;
 }
-.nav button .ic { font-size: 21px; line-height: 1; transition: transform .15s ease; }
+.nav button .ic { line-height: 1; transition: transform .15s ease; display: flex; }
+.nav button .ic svg { width: 25px; height: 25px; display: block; }
 .nav button.active { color: var(--violet-500); }
 .nav button.active .ic { transform: translateY(-2px) scale(1.06); }
 .nav button.active::after {
@@ -215,6 +220,61 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
   opacity: 0; transition: opacity .2s ease; pointer-events: none; max-width: 90%; text-align: center;
 }
 .toast.show { opacity: 1; }
+
+/* ── Календарь-расписание ────────────────────────────── */
+.cal { padding: 16px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cal-title { font-weight: 800; font-size: 16px; text-transform: capitalize; }
+.cal-nav {
+  width: 36px; height: 36px; border: none; border-radius: 11px;
+  background: var(--lavender); color: var(--violet-500); font-size: 21px; font-weight: 700; cursor: pointer;
+}
+.cal-nav:active { transform: scale(.94); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-wds { margin-bottom: 6px; }
+.cal-wds span { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding: 3px 0; }
+.cal-cell {
+  position: relative; aspect-ratio: 1 / 1; border: none; background: transparent; border-radius: 12px;
+  font-family: inherit; font-size: 14.5px; font-weight: 600; color: var(--text); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: background .12s ease;
+}
+.cal-cell.empty { visibility: hidden; }
+.cal-cell.today { color: var(--violet-500); font-weight: 800; }
+.cal-cell.has { font-weight: 800; }
+.cal-cell.sel { background: var(--violet-500); color: #fff; }
+.cal-cell:active { transform: scale(.95); }
+.cal-dot { position: absolute; bottom: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--k, var(--violet-500)); }
+.cal-cell.sel .cal-dot { background: #fff; }
+#cal-events { margin-top: 12px; }
+.card.ev .ev-tag {
+  display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .3px;
+  padding: 5px 11px; border-radius: 999px; margin-bottom: 9px; color: #fff; background: var(--k, var(--violet-500));
+}
+.card.ev .ev-tag.registration { color: var(--violet-900); }
+
+/* Цвета типов событий */
+.webinar { --k: var(--violet-500); }
+.deadline { --k: #ff6b6b; }
+.registration { --k: var(--lime-400); }
+.olympiad { --k: var(--violet-700); }
+.event { --k: var(--violet-300); }
+
+/* ── Карточка «Новые материалы» ──────────────────────── */
+.card.news .news-cat { font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--violet-500); margin-bottom: 7px; }
+.card.news h3 { margin-bottom: 6px; }
+
+/* ── Профиль: аватар + переключатель темы ────────────── */
+.profile-head { display: flex; align-items: center; gap: 15px; margin: 6px 0 18px; }
+.profile-av {
+  width: 66px; height: 66px; border-radius: 50%; overflow: hidden; flex: 0 0 66px;
+  border: 3px solid var(--lime-500); background: var(--violet-500); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 27px; font-weight: 800;
+}
+.profile-av img { width: 100%; height: 100%; object-fit: cover; }
+.profile-name { font-size: 20px; font-weight: 800; letter-spacing: -.3px; }
+.seg { display: flex; gap: 8px; background: var(--card); padding: 6px; border-radius: 15px; box-shadow: var(--shadow-sm); }
+.seg button { flex: 1; border: none; background: transparent; padding: 11px 6px; border-radius: 11px; font-weight: 700; font-size: 13px; color: var(--muted); cursor: pointer; }
+.seg button.on { background: var(--violet-500); color: #fff; }
 
 /* ==================== АДМИН-ПАНЕЛЬ ==================== */
 .admin-app { min-height: 100vh; background: var(--graphite); color: #fff; padding-bottom: 28px; }
@@ -275,17 +335,24 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .aproof { max-width: 100%; border-radius: 12px; margin-top: 10px; display: block; }
 .ahint { color: #7a7a7a; font-size: 12px; }
 
-/* ── Тёмная тема Telegram ─────────────────────────────── */
+/* ── Тёмная тема (выбор пользователя через data-theme=dark) ── */
+:root[data-theme="dark"] {
+  --bg: #17131f; --card: #221b30; --text: #f3f0fb; --muted: #a99fc0;
+  --line: #3a3350; --shadow: 0 10px 30px rgba(0,0,0,.35); --shadow-sm: 0 4px 14px rgba(0,0,0,.3);
+}
+:root[data-theme="dark"] .btn.secondary { background: var(--card); }
+:root[data-theme="dark"] .nav { background: #1d1729; }
+:root[data-theme="dark"] .cal-nav { background: #2a2340; }
+:root[data-theme="dark"] .badge.todo { background: #2c2540; color: var(--muted); }
+:root[data-theme="dark"] .badge.done { background: #24371a; color: #a6f03f; }
+:root[data-theme="dark"] .opt.sel { background: #2a2340; }
+:root[data-theme="dark"] .opt.correct { background: #24371a; }
+:root[data-theme="dark"] .opt.wrong { background: #3a1f1f; }
+
+/* До инициализации JS — уважаем системную тёмную тему (без мелких доводок). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #17131f; --card: #221b30; --text: #f3f0fb; --muted: #a99fc0;
     --line: #3a3350; --shadow: 0 10px 30px rgba(0,0,0,.35); --shadow-sm: 0 4px 14px rgba(0,0,0,.3);
   }
-  .btn.secondary { background: var(--card); }
-  .nav { background: #1d1729; }
-  .badge.todo { background: #2c2540; color: var(--muted); }
-  .badge.done { background: #24371a; color: #a6f03f; }
-  .opt.sel { background: #2a2340; }
-  .opt.correct { background: #24371a; }
-  .opt.wrong { background: #3a1f1f; }
 }

@@ -9,8 +9,10 @@ import logging
 
 from sqlalchemy import func, select
 
+from datetime import datetime, timedelta
+
 from .db import session_scope
-from .models import Material, MaterialKind, MaterialStatus, Question, Test
+from .models import Event, Material, MaterialKind, MaterialStatus, Question, Test
 
 log = logging.getLogger("finyro.seed")
 
@@ -135,5 +137,18 @@ async def seed_if_empty() -> None:
                 ),
             ]
         )
+        # Демо-события расписания (относительно текущей даты).
+        now = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        session.add_all([
+            Event(event_date=now + timedelta(days=2, hours=18), kind="webinar",
+                  title="Вебинар: разбор заданий",
+                  description="Онлайн-разбор типовых задач отборочного этапа. Ссылка придёт в бот."),
+            Event(event_date=now + timedelta(days=5, hours=23, minutes=59), kind="deadline",
+                  title="Дедлайн регистрации на олимпиаду",
+                  description="Последний день подать заявку на участие."),
+            Event(event_date=now + timedelta(days=9, hours=10), kind="olympiad",
+                  title="Отборочный этап олимпиады",
+                  description="Онлайн, 2 часа. Не забудьте подготовиться по теории и тестам."),
+        ])
         await session.commit()
         log.info("Демо-контент добавлен.")

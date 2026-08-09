@@ -5,6 +5,14 @@
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const state = { token: null, user: null, tab: "cabinet" };
 
+  // Одноцветные векторные иконки навигации (наследуют currentColor).
+  const ICONS = {
+    home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.6 12 3l9 7.6"/><path d="M5.5 9.4V20h13V9.4"/></svg>',
+    videos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10.5 9.2 15 12l-4.5 2.8z" fill="currentColor" stroke="none"/></svg>',
+    tests: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 3.5h6V5H9z"/><path d="M8.5 11.5l2 2 4-4"/></svg>',
+    theory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.4 5.3 8 4.7 5.5 4.7V18c2.5 0 4.9.6 6.5 1.8 1.6-1.2 4-1.8 6.5-1.8V4.7C16 4.7 13.6 5.3 12 6.5z"/><path d="M12 6.5v13.3"/></svg>',
+  };
+
   // Логотип «монета роста» — чистая марка без подложки (лайм на прозрачном).
   const LOGO_MARK = `
     <svg class="logo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Финуро">
@@ -20,6 +28,23 @@
     String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+  // --- Тема (светлая / тёмная / системная) ---
+  function currentTheme() { return localStorage.getItem("finyro-theme") || "system"; }
+  function resolveTheme(theme) {
+    if (theme && theme !== "system") return theme;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", resolveTheme(theme));
+  }
+  function setTheme(theme) { localStorage.setItem("finyro-theme", theme); applyTheme(theme); }
+  // Реакция на смену системной темы, когда выбран режим «Авто».
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      if (currentTheme() === "system") applyTheme("system");
+    });
+  }
 
   let toastTimer = null;
   function toast(msg) {
@@ -50,6 +75,7 @@
 
   // --- Загрузка / авторизация ---
   async function boot() {
+    applyTheme(currentTheme());
     if (tg) { try { tg.ready(); tg.expand(); } catch (_) {} }
     try {
       const initData = tg ? tg.initData : "";
@@ -95,6 +121,8 @@
       ? "до " + new Date(state.user.access_expires_at).toLocaleDateString("ru-RU")
       : "бессрочно";
     const initials = (firstName(state.user.name)[0] || "?").toUpperCase();
+    state.photo = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.photo_url) || null;
+    const avatarInner = state.photo ? `<img src="${esc(state.photo)}" alt="">` : initials;
     $("#app").innerHTML = `
       <header class="appbar">
         <div class="bar-inner">
@@ -105,7 +133,7 @@
           </div>
           <div class="spacer"></div>
           ${state.user.is_admin ? '<button class="icon-btn admin-enter" id="adminBtn" title="Админ-панель">🛡️</button>' : ""}
-          <button class="avatar" id="profileBtn" title="Личный кабинет">${initials}</button>
+          <button class="avatar" id="profileBtn" title="Личный кабинет">${avatarInner}</button>
         </div>
       </header>
       <div id="screens">
@@ -118,10 +146,10 @@
       </div>
       <nav class="nav">
         <div class="nav-inner">
-          ${navBtn("home", "🏠", "Главная")}
-          ${navBtn("videos", "🎬", "Вебинары")}
-          ${navBtn("tests", "📝", "Тесты")}
-          ${navBtn("theory", "📚", "Теория")}
+          ${navBtn("home", "Главная")}
+          ${navBtn("videos", "Вебинары")}
+          ${navBtn("tests", "Тесты")}
+          ${navBtn("theory", "Теория")}
         </div>
       </nav>`;
     document.querySelectorAll(".nav button").forEach((b) => {
@@ -133,8 +161,8 @@
     state._expires = expires;
   }
 
-  const navBtn = (tab, ic, label) =>
-    `<button data-tab="${tab}"><span class="ic">${ic}</span><span>${label}</span></button>`;
+  const navBtn = (tab, label) =>
+    `<button data-tab="${tab}"><span class="ic">${ICONS[tab]}</span><span>${label}</span></button>`;
 
   function showTab(name) {
     state.tab = name;
@@ -156,7 +184,7 @@
   async function loadHome(el) {
     loadingInto(el);
     try {
-      const [me, videos] = await Promise.all([api("/me"), api("/videos")]);
+      const [me, videos, ev] = await Promise.all([api("/me"), api("/videos"), api("/events").catch(() => ({ events: [] }))]);
       const cont = me.continue;
       const newItems = videos.videos.filter((v) => !v.watched).slice(0, 3);
       let html = `<h1 class="title">Привет, ${esc(firstName(me.user.name))}! 👋</h1>`;
@@ -167,7 +195,7 @@
         html += `
           <h2 class="section">Продолжить просмотр</h2>
           <div class="card continue-card" id="cont">
-            <div class="thumb">🎬</div>
+            <div class="thumb">${ICONS.videos}</div>
             <div class="grow">
               <h3>${esc(cont.title)}</h3>
               <p>${esc(cont.description || "Вебинар курса")}</p>
@@ -175,11 +203,10 @@
             </div>
             <div class="play">▶</div>
           </div>
-          <div style="margin-top:-4px">
-            <button class="btn" id="contBtn">${label}</button>
-          </div>`;
+          <button class="btn" id="contBtn">${label}</button>`;
       }
 
+      html += `<h2 class="section">Расписание</h2><div id="cal-host"></div>`;
       html += `<h2 class="section">Новые материалы</h2><div id="home-new"></div>`;
       el.innerHTML = html;
 
@@ -189,19 +216,95 @@
         $("#contBtn", el).onclick = go;
       }
 
+      mountCalendar($("#cal-host", el), ev.events || []);
+
       const box = $("#home-new", el);
       if (!newItems.length) {
         box.innerHTML = `<div class="card"><p>Всё изучено 🎉 Загляните позже — контент выходит постепенно.</p></div>`;
       } else {
         newItems.forEach((v) => {
           const c = document.createElement("div");
-          c.className = "card tap";
-          c.innerHTML = `<div class="row"><div class="grow"><h3>${esc(v.title)}</h3><p>${esc(v.description || "Вебинар")}</p></div><span class="badge new">новое</span></div>`;
+          c.className = "card tap news";
+          c.innerHTML = `<div class="news-cat">Вебинар · Новое</div><h3>${esc(v.title)}</h3><p>${esc(v.description || "Материал курса")}</p>`;
           c.onclick = () => openVideo(v.id);
           box.appendChild(c);
         });
       }
     } catch (e) { errCard(el, e); }
+  }
+
+  // --- Календарь-расписание ---
+  const KIND_RU = { webinar: "Вебинар", deadline: "Дедлайн", registration: "Регистрация", olympiad: "Олимпиада", event: "Событие" };
+  const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+  const WEEKDAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const dstr = (y, m, d) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
+  const todayStr = () => { const t = new Date(); return dstr(t.getFullYear(), t.getMonth(), t.getDate()); };
+
+  function mountCalendar(host, events) {
+    const byDate = {};
+    events.forEach((e) => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+    // Начинаем с месяца ближайшего события (или текущего).
+    const upcoming = events.map((e) => e.date).filter((d) => d >= todayStr()).sort()[0];
+    const startD = upcoming ? new Date(upcoming) : new Date();
+    let view = new Date(startD.getFullYear(), startD.getMonth(), 1);
+    let selected = upcoming || todayStr();
+
+    host.innerHTML = `
+      <div class="cal card">
+        <div class="cal-head">
+          <button class="cal-nav" data-mo="-1" aria-label="Назад">‹</button>
+          <div class="cal-title" id="cal-title"></div>
+          <button class="cal-nav" data-mo="1" aria-label="Вперёд">›</button>
+        </div>
+        <div class="cal-grid cal-wds">${WEEKDAYS.map((w) => `<span>${w}</span>`).join("")}</div>
+        <div class="cal-grid cal-days" id="cal-days"></div>
+      </div>
+      <div id="cal-events"></div>`;
+
+    const draw = () => {
+      const y = view.getFullYear(), m = view.getMonth();
+      $("#cal-title", host).textContent = `${MONTHS[m]} ${y}`;
+      const startWd = (new Date(y, m, 1).getDay() + 6) % 7; // Пн = 0
+      const days = new Date(y, m + 1, 0).getDate();
+      let cells = "";
+      for (let i = 0; i < startWd; i++) cells += `<span class="cal-cell empty"></span>`;
+      for (let d = 1; d <= days; d++) {
+        const ds = dstr(y, m, d);
+        const evs = byDate[ds];
+        const cls = ["cal-cell"];
+        if (ds === selected) cls.push("sel");
+        if (ds === todayStr()) cls.push("today");
+        if (evs) cls.push("has");
+        cells += `<button class="${cls.join(" ")}" data-d="${ds}">${d}${evs ? `<i class="cal-dot ${evs[0].kind}"></i>` : ""}</button>`;
+      }
+      $("#cal-days", host).innerHTML = cells;
+      host.querySelectorAll(".cal-cell[data-d]").forEach((b) => (b.onclick = () => { selected = b.dataset.d; draw(); drawEvents(); }));
+    };
+
+    const drawEvents = () => {
+      const box = $("#cal-events", host);
+      const evs = byDate[selected] || [];
+      const dd = new Date(selected);
+      const human = `${dd.getDate()} ${MONTHS[dd.getMonth()].toLowerCase()}`;
+      if (!evs.length) { box.innerHTML = `<p class="muted" style="padding:4px 2px">На ${human} событий нет.</p>`; return; }
+      box.innerHTML = evs.map((e) => {
+        const t = new Date(e.datetime);
+        const time = (t.getHours() || t.getMinutes()) ? ` · ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : "";
+        return `<div class="card ev">
+          <div class="ev-tag ${e.kind}">${KIND_RU[e.kind] || "Событие"}${time}</div>
+          <h3>${esc(e.title)}</h3>
+          ${e.description ? `<p>${esc(e.description)}</p>` : ""}
+        </div>`;
+      }).join("");
+    };
+
+    host.querySelectorAll(".cal-nav").forEach((b) => (b.onclick = () => {
+      view = new Date(view.getFullYear(), view.getMonth() + Number(b.dataset.mo), 1);
+      draw();
+    }));
+    draw();
+    drawEvents();
   }
 
   // --- Личный кабинет (профиль) ---
@@ -212,24 +315,41 @@
     try {
       const me = await api("/me");
       const p = me.progress;
+      const av = state.photo ? `<img src="${esc(state.photo)}" alt="">` : (firstName(me.user.name)[0] || "?").toUpperCase();
+      const th = currentTheme();
       el.innerHTML = `
         <button class="back" id="pback">◀️ Назад</button>
-        <h1 class="title" style="margin-top:12px">Личный кабинет</h1>
+        <div class="profile-head">
+          <div class="profile-av">${av}</div>
+          <div>
+            <div class="profile-name">${esc(me.user.name)}</div>
+            <div class="muted" style="font-size:13px">${me.user.username ? "@" + esc(me.user.username) : "Ученик Финуро"}</div>
+          </div>
+        </div>
         <div class="card status-card">
           <h3>${me.user.has_access ? '<span class="dot green"></span>Подписка активна' : '<span class="dot red"></span>Подписка неактивна'}</h3>
-          <p style="color:rgba(255,255,255,.85)">${esc(me.user.name)}</p>
-          <p style="color:rgba(255,255,255,.85)">Доступ: ${esc(state._expires || "")}</p>
+          <p>Доступ: ${esc(state._expires || "")}</p>
         </div>
         <div class="stats">
           <div class="stat"><div class="num">${p.videos_watched}/${p.videos_total}</div><div class="lbl">Вебинаров</div></div>
           <div class="stat"><div class="num">${p.tests_passed}</div><div class="lbl">Тестов пройдено</div></div>
           <div class="stat"><div class="num">${p.avg_percent}%</div><div class="lbl">Средний балл</div></div>
         </div>
+        <h2 class="section">Оформление</h2>
+        <div class="seg" id="themeSeg">
+          <button data-th="light" class="${th === "light" ? "on" : ""}">☀️ Светлая</button>
+          <button data-th="dark" class="${th === "dark" ? "on" : ""}">🌙 Тёмная</button>
+          <button data-th="system" class="${th === "system" ? "on" : ""}">Авто</button>
+        </div>
         <h2 class="section">Поддержка</h2>
         <p class="muted" style="margin-bottom:12px">Напишите администратору — ответ придёт в бот Финуро.</p>
         <textarea id="msg" placeholder="Ваш вопрос…"></textarea>
         <button class="btn" id="send" style="margin-top:12px">Отправить</button>`;
       $("#pback", el).onclick = () => showTab(state.tab || "home");
+      el.querySelectorAll("#themeSeg button").forEach((b) => (b.onclick = () => {
+        setTheme(b.dataset.th);
+        el.querySelectorAll("#themeSeg button").forEach((x) => x.classList.toggle("on", x === b));
+      }));
       $("#send", el).onclick = async () => {
         const text = $("#msg", el).value.trim();
         if (!text) { toast("Введите сообщение"); return; }
@@ -434,8 +554,8 @@
   // ==================== АДМИН-ПАНЕЛЬ ====================
   const A_TABS = [
     ["overview", "Обзор"], ["payments", "Заявки"], ["students", "Ученики"],
-    ["content", "Контент"], ["tests", "Тесты"], ["support", "Поддержка"],
-    ["broadcast", "Рассылка"], ["results", "Результаты"],
+    ["content", "Контент"], ["schedule", "Расписание"], ["tests", "Тесты"],
+    ["support", "Поддержка"], ["broadcast", "Рассылка"], ["results", "Результаты"],
   ];
 
   async function authBlob(path) {
@@ -479,7 +599,7 @@
     const el = $("#ascreen");
     ({
       overview: aOverview, payments: aPayments, students: aStudents, content: aContent,
-      tests: aTests, support: aSupport, broadcast: aBroadcast, results: aResults,
+      schedule: aSchedule, tests: aTests, support: aSupport, broadcast: aBroadcast, results: aResults,
     })[name](el);
   }
 
@@ -671,6 +791,67 @@
       } else {
         toast("Загрузите файл MP4 или вставьте ссылку");
       }
+    };
+  }
+
+  // --- Расписание (админ) ---
+  const evCard = (e) => `
+    <div class="acard">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1"><h4>${esc(e.title)}</h4><p>${e.date}${e.time && e.time !== "00:00" ? " · " + e.time : ""} · ${KIND_RU[e.kind] || "Событие"}</p></div>
+        <button class="abtn del" data-delev="${e.id}">Удалить</button>
+      </div>
+    </div>`;
+
+  async function aSchedule(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/events");
+      el.innerHTML = `
+        <button class="abtn ok" id="addev" style="margin-bottom:14px">➕ Добавить событие</button>
+        <div id="evform"></div>
+        <div id="evlist">${d.events.map(evCard).join("") || '<div class="acard"><p>Событий пока нет.</p></div>'}</div>`;
+      $("#addev", el).onclick = () => renderEvForm($("#evform", el), el);
+      el.querySelectorAll("[data-delev]").forEach((b) => (b.onclick = async () => {
+        if (!confirm("Удалить событие?")) return;
+        try { await api("/admin/events/" + b.dataset.delev, { method: "DELETE" }); toast("Удалено"); aSchedule(el); }
+        catch (e) { toast(e.message); }
+      }));
+    } catch (e) { aErr(el, e); }
+  }
+
+  function renderEvForm(box, el) {
+    const today = new Date().toISOString().slice(0, 10);
+    box.innerHTML = `
+      <div class="acard">
+        <input class="ainput" type="date" id="evdate" value="${today}">
+        <input class="ainput" type="time" id="evtime">
+        <select class="asel" id="evkind">
+          <option value="webinar">🎥 Вебинар</option>
+          <option value="deadline">⏰ Дедлайн</option>
+          <option value="registration">📝 Регистрация</option>
+          <option value="olympiad">🏆 Олимпиада</option>
+          <option value="event">📌 Событие</option>
+        </select>
+        <input class="ainput" id="evtitle" placeholder="Название события">
+        <textarea class="aarea" id="evdesc" placeholder="Описание (необязательно)"></textarea>
+        <div class="arow">
+          <button class="abtn ok" id="evsave">Создать</button>
+          <button class="abtn sec" id="evcancel">Отмена</button>
+        </div>
+      </div>`;
+    $("#evcancel", box).onclick = () => (box.innerHTML = "");
+    $("#evsave", box).onclick = async () => {
+      const date = $("#evdate", box).value;
+      const title = $("#evtitle", box).value.trim();
+      if (!date || !title) { toast("Укажите дату и название"); return; }
+      try {
+        await api("/admin/events", { method: "POST", body: {
+          date, time: $("#evtime", box).value, title,
+          description: $("#evdesc", box).value.trim(), kind: $("#evkind", box).value,
+        } });
+        toast("Событие создано ✅"); aSchedule(el);
+      } catch (e) { toast(e.message); }
     };
   }
 

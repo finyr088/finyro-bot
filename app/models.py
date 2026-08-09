@@ -177,6 +177,19 @@ class SupportMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Event(Base):
+    """Событие расписания/календаря: вебинар, дедлайн регистрации, олимпиада и т.п."""
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_date: Mapped[datetime] = mapped_column(DateTime, index=True)
+    title: Mapped[str] = mapped_column(String(256))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # kind: event | webinar | deadline | registration | olympiad
+    kind: Mapped[str] = mapped_column(String(32), default="event")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class AdminLog(Base):
     __tablename__ = "admin_logs"
 

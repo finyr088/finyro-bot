@@ -10,6 +10,7 @@ from ..db import get_session
 from .. import services
 from ..bot.notify import notify_admins
 from ..models import (
+    Event,
     Material,
     MaterialKind,
     MaterialStatus,
@@ -173,6 +174,27 @@ async def get_theory(
     if mat is None or mat.kind != MaterialKind.THEORY or not mat.is_visible():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Тема не найдена")
     return {"id": mat.id, "title": mat.title, "content": mat.content or ""}
+
+
+# --- Календарь / расписание ---
+
+@router.get("/events")
+async def list_events(user: User = Depends(require_access), session: AsyncSession = Depends(get_session)):
+    from sqlalchemy import select as _sel
+    rows = list(await session.scalars(_sel(Event).order_by(Event.event_date.asc())))
+    return {
+        "events": [
+            {
+                "id": e.id,
+                "date": e.event_date.strftime("%Y-%m-%d"),
+                "datetime": e.event_date.isoformat(),
+                "title": e.title,
+                "description": e.description,
+                "kind": e.kind,
+            }
+            for e in rows
+        ]
+    }
 
 
 # --- Тесты ---

@@ -21,6 +21,7 @@ from ..bot import texts as bot_texts
 from ..bot import keyboards as bot_kb
 from ..db import get_session
 from ..models import (
+    Event,
     Material,
     MaterialKind,
     MaterialStatus,
@@ -59,6 +60,14 @@ class TestIn(BaseModel):
     title: str
     description: str | None = None
     questions: list[QuestionIn]
+
+
+class EventIn(BaseModel):
+    date: str            # YYYY-MM-DD
+    time: str = ""       # HH:MM (необязательно)
+    title: str
+    description: str | None = None
+    kind: str = "event"
 
 
 class ReplyIn(BaseModel):
@@ -291,6 +300,44 @@ async def delete_material(material_id: int, session: AsyncSession = Depends(get_
     if m.stream_url and m.stream_url.startswith("upload:"):
         (Path(settings.MEDIA_DIR) / m.stream_url[len("upload:"):]).unlink(missing_ok=True)
     await session.delete(m)
+    await session.commit()
+    return {"ok": True}
+
+
+# ─────────────────────────── Расписание ──────────────────────
+
+@router.get("/events")
+async def admin_events(session: AsyncSession = Depends(get_session)):
+    rows = list(await session.scalars(select(Event).order_by(Event.event_date.asc())))
+    return {"events": [{
+        "id": e.id, "date": e.event_date.strftime("%Y-%m-%d"),
+        "time": e.event_date.strftime("%H:%M"),
+        "title": e.title, "description": e.description, "kind": e.kind,
+    } for e in rows]}
+
+
+@router.post("/events")
+async def create_event(body: EventIn, session: AsyncSession = Depends(get_session)):
+    from datetime import datetime as _dt
+    if not body.title.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Введите название события")
+    try:
+        stamp = f"{body.date} {body.time or '00:00'}"
+        dt = _dt.strptime(stamp, "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неверная дата (нужен формат ГГГГ-ММ-ДД)")
+    e = Event(event_date=dt, title=body.title.strip(), description=body.description, kind=body.kind or "event")
+    session.add(e)
+    await session.commit()
+    return {"ok": True, "id": e.id}
+
+
+@router.delete("/events/{event_id}")
+async def delete_event(event_id: int, session: AsyncSession = Depends(get_session)):
+    e = await session.get(Event, event_id)
+    if e is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Событие не найдено")
+    await session.delete(e)
     await session.commit()
     return {"ok": True}
 
