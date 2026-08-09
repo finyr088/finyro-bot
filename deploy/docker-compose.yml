@@ -17,6 +17,10 @@ services:
       - appdata:/data
     expose:
       - "8080"
+    # Прибиваем api.telegram.org к рабочему IP: в этом ДЦ домен резолвится в
+    # несколько адресов, часть из которых режется — из-за чего бот виснет.
+    extra_hosts:
+      - "api.telegram.org:149.154.167.220"
     restart: unless-stopped
 
   caddy:
