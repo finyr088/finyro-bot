@@ -177,6 +177,18 @@ class SupportMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class LoginCode(Base):
+    """Одноразовый код для входа на сайт в браузере (когда Telegram WebApp недоступен)."""
+    __tablename__ = "login_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    code: Mapped[str] = mapped_column(String(8))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Event(Base):
     """Событие расписания/календаря: вебинар, дедлайн регистрации, олимпиада и т.п."""
     __tablename__ = "events"

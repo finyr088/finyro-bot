@@ -60,6 +60,8 @@ def main_menu_inline(has_access: bool) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if has_access and _webapp_available():
         rows.append([InlineKeyboardButton(text="🚀 Открыть приложение", web_app=WebAppInfo(url=settings.MINIAPP_URL))])
+    if _webapp_available():
+        rows.append([InlineKeyboardButton(text="🌐 Открыть на сайте (если Telegram тормозит)", url=settings.MINIAPP_URL)])
     rows.append([
         InlineKeyboardButton(text="🎓 О курсе", callback_data="menu:about"),
         InlineKeyboardButton(text="❓ Как учиться", callback_data="menu:how"),

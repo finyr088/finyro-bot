@@ -276,6 +276,21 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .seg button { flex: 1; border: none; background: transparent; padding: 11px 6px; border-radius: 11px; font-weight: 700; font-size: 13px; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--violet-500); color: #fff; }
 
+/* ── Экран входа по коду (браузер) ───────────────────── */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login-card { width: 100%; max-width: 380px; background: var(--card); border-radius: var(--radius); padding: 34px 26px; box-shadow: var(--shadow); text-align: center; }
+.login-logo { width: 66px; height: 66px; margin: 0 auto 18px; background: var(--violet-500); border-radius: 20px; display: flex; align-items: center; justify-content: center; }
+.login-logo svg { width: 42px; height: 42px; }
+.login-title { font-size: 24px; font-weight: 800; margin: 0 0 8px; letter-spacing: -.3px; }
+.login-sub { margin-bottom: 18px; font-size: 14px; }
+.login-inp {
+  width: 100%; border: 2px solid var(--line); border-radius: 14px; padding: 14px 16px;
+  font-size: 16px; text-align: center; background: var(--bg); color: var(--text); margin-bottom: 12px;
+}
+.login-inp:focus { outline: none; border-color: var(--violet-500); }
+#l-code { letter-spacing: 6px; font-weight: 800; font-size: 22px; }
+.login-hint { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.4; }
+
 /* ==================== АДМИН-ПАНЕЛЬ ==================== */
 .admin-app { min-height: 100vh; background: var(--graphite); color: #fff; padding-bottom: 28px; }
 .admin-bar {

@@ -1,16 +1,21 @@
 """REST API мини-приложения Финуро."""
 from __future__ import annotations
 
+import random
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..db import get_session
 from .. import services
-from ..bot.notify import notify_admins
+from ..bot.notify import notify_admins, send_to_user
 from ..models import (
     Event,
+    LoginCode,
     Material,
     MaterialKind,
     MaterialStatus,
@@ -29,6 +34,20 @@ router = APIRouter(prefix="/api")
 
 class AuthRequest(BaseModel):
     init_data: str = ""
+
+
+class RequestCodeIn(BaseModel):
+    login: str
+
+
+class VerifyCodeIn(BaseModel):
+    login: str
+    code: str
+
+
+CODE_TTL_SECONDS = 600          # код действует 10 минут
+CODE_RESEND_COOLDOWN = 60       # не чаще раза в минуту
+CODE_MAX_ATTEMPTS = 5
 
 
 class SupportRequest(BaseModel):
@@ -67,6 +86,78 @@ async def auth_telegram(body: AuthRequest, session: AsyncSession = Depends(get_s
         first_name=data.get("first_name"),
         last_name=data.get("last_name"),
     )
+    await session.commit()
+    token = create_token(user.id, user.telegram_id)
+    return {"token": token, "user": _user_public(user)}
+
+
+# --- Вход по коду (для браузера, когда Telegram недоступен) ---
+
+async def _find_user_by_login(session: AsyncSession, login: str) -> User | None:
+    login = (login or "").strip().lstrip("@")
+    if not login:
+        return None
+    if login.isdigit():
+        return await session.scalar(select(User).where(User.telegram_id == int(login)))
+    return await session.scalar(select(User).where(func.lower(User.username) == login.lower()))
+
+
+@router.post("/auth/request_code")
+async def request_code(body: RequestCodeIn, session: AsyncSession = Depends(get_session)):
+    user = await _find_user_by_login(session, body.login)
+    if user is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Пользователь не найден. Откройте бота @finyrobot, нажмите «Start» и попробуйте снова.",
+        )
+    # Антиспам: не чаще раза в минуту.
+    recent = await session.scalar(
+        select(LoginCode).where(LoginCode.user_id == user.id).order_by(LoginCode.created_at.desc()).limit(1)
+    )
+    if recent and (utcnow() - recent.created_at).total_seconds() < CODE_RESEND_COOLDOWN:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Код уже отправлен в Telegram. Подождите минуту.")
+
+    # Удаляем прежние коды пользователя.
+    for old in await session.scalars(select(LoginCode).where(LoginCode.user_id == user.id)):
+        await session.delete(old)
+
+    code = f"{random.randint(0, 999999):06d}"
+    session.add(LoginCode(user_id=user.id, code=code, expires_at=utcnow() + timedelta(seconds=CODE_TTL_SECONDS)))
+    await session.commit()
+
+    ok = await send_to_user(
+        user.telegram_id,
+        f"🔑 Код для входа на сайт Финуро: <b>{code}</b>\n\n"
+        f"Действует 10 минут. Никому не сообщайте этот код.",
+    )
+    if not ok:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Не удалось отправить код в Telegram. Откройте бота @finyrobot и нажмите «Start».",
+        )
+    return {"ok": True}
+
+
+@router.post("/auth/verify_code")
+async def verify_code(body: VerifyCodeIn, session: AsyncSession = Depends(get_session)):
+    user = await _find_user_by_login(session, body.login)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
+    lc = await session.scalar(
+        select(LoginCode).where(LoginCode.user_id == user.id).order_by(LoginCode.created_at.desc()).limit(1)
+    )
+    if lc is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Сначала запросите код")
+    if lc.expires_at < utcnow():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Код истёк — запросите новый")
+    if lc.attempts >= CODE_MAX_ATTEMPTS:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Слишком много попыток — запросите новый код")
+    if body.code.strip() != lc.code:
+        lc.attempts += 1
+        await session.commit()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неверный код")
+
+    await session.delete(lc)
     await session.commit()
     token = create_token(user.id, user.telegram_id)
     return {"token": token, "user": _user_public(user)}
