@@ -4,10 +4,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import BASE_DIR, settings
@@ -120,6 +122,25 @@ async def healthz():
 # Загруженные видео (с поддержкой Range-запросов для перемотки).
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
-# Статика мини-приложения. Монтируется последней — /api/*, /media/* имеют приоритет.
+
+def _asset_ver(name: str) -> int:
+    try:
+        return int((WEB_DIR / name).stat().st_mtime)
+    except OSError:
+        return int(time.time())
+
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/index.html", response_class=HTMLResponse)
+async def index():
+    """Отдаём index.html без кеша и с версиями ассетов — чтобы обновления
+    подхватывались сразу (Telegram кеширует мини-аппы очень агрессивно)."""
+    html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    html = html.replace('href="styles.css"', f'href="styles.css?v={_asset_ver("styles.css")}"')
+    html = html.replace('src="app.js"', f'src="app.js?v={_asset_ver("app.js")}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
+# Статика мини-приложения. Монтируется последней — /api/*, /media/*, / имеют приоритет.
 if WEB_DIR.exists():
     app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
