@@ -448,7 +448,7 @@
         const d = await api("/sections");
         let html = `<h1 class="title">Вебинары</h1>`;
         html += d.sections.length
-          ? d.sections.map((s) => folderCard("📁", s.title, `${s.topics} тем · ${s.videos} видео`, "sec", s.id)).join("")
+          ? `<div class="cards">${d.sections.map((s) => folderCard("📁", s.title, `${s.topics} тем · ${s.videos} видео`, "sec", s.id)).join("")}</div>`
           : emptyCard("Вебинары скоро появятся.");
         el.innerHTML = html;
         el.querySelectorAll("[data-sec]").forEach((c) => (c.onclick = () => {
@@ -459,7 +459,7 @@
         const d = await api("/sections/" + nav.sectionId + "/topics");
         let html = `<button class="back" id="wb">◀️ Разделы</button><h1 class="title" style="margin-top:10px">${esc(d.section.title)}</h1>`;
         html += d.topics.length
-          ? d.topics.map((t) => folderCard("📂", t.title, `${t.videos} видео`, "top", t.id)).join("")
+          ? `<div class="cards">${d.topics.map((t) => folderCard("📂", t.title, `${t.videos} видео`, "top", t.id)).join("")}</div>`
           : emptyCard("В этом разделе пока нет тем.");
         el.innerHTML = html;
         $("#wb", el).onclick = () => { webinarNav = { level: "sections" }; renderWebinars(el); };
@@ -471,7 +471,7 @@
         const d = await api("/topics/" + nav.topicId + "/videos");
         let html = `<button class="back" id="wb">◀️ Темы</button><h1 class="title" style="margin-top:10px">${esc(d.topic.title)}</h1>`;
         html += d.videos.length
-          ? d.videos.map((v) => `<div class="card tap" data-vid="${v.id}"><div class="row"><div class="grow"><h3>🎬 ${esc(v.title)}</h3></div>${v.watched ? '<span class="badge done">просмотрено</span>' : '<span class="badge todo">смотреть</span>'}</div></div>`).join("")
+          ? `<div class="cards">${d.videos.map((v) => `<div class="card tap" data-vid="${v.id}"><div class="row"><div class="grow"><h3>🎬 ${esc(v.title)}</h3></div>${v.watched ? '<span class="badge done">просмотрено</span>' : '<span class="badge todo">смотреть</span>'}</div></div>`).join("")}</div>`
           : emptyCard("В этой теме пока нет видео.");
         el.innerHTML = html;
         $("#wb", el).onclick = () => { webinarNav = { level: "topics", sectionId: nav.sectionId }; renderWebinars(el); };
@@ -543,9 +543,7 @@
       const data = await api("/tests");
       let html = `<h1 class="title">Тесты</h1>`;
       if (!data.tests.length) html += emptyCard("Тесты скоро появятся.");
-      data.tests.forEach((t) => {
-        html += `<div class="card tap" data-tid="${t.id}"><h3>${esc(t.title)}</h3><p>${esc(t.description || "")} · ${t.questions} вопр.</p></div>`;
-      });
+      else html += `<div class="cards">${data.tests.map((t) => `<div class="card tap" data-tid="${t.id}"><h3>${esc(t.title)}</h3><p>${esc(t.description || "")} · ${t.questions} вопр.</p></div>`).join("")}</div>`;
       el.innerHTML = html;
       el.querySelectorAll("[data-tid]").forEach((c) => (c.onclick = () => openTest(+c.dataset.tid)));
     } catch (e) { errCard(el, e); }
@@ -611,9 +609,7 @@
       const data = await api("/theory");
       let html = `<h1 class="title">Изучение тем</h1>`;
       if (!data.topics.length) html += emptyCard("Темы скоро появятся.");
-      data.topics.forEach((t) => {
-        html += `<div class="card tap" data-th="${t.id}"><div class="row"><div class="grow"><h3>${esc(t.title)}</h3></div><span class="badge todo">читать</span></div></div>`;
-      });
+      else html += `<div class="cards">${data.topics.map((t) => `<div class="card tap" data-th="${t.id}"><div class="row"><div class="grow"><h3>${esc(t.title)}</h3></div><span class="badge todo">читать</span></div></div>`).join("")}</div>`;
       el.innerHTML = html;
       el.querySelectorAll("[data-th]").forEach((c) => (c.onclick = () => openTheory(+c.dataset.th)));
     } catch (e) { errCard(el, e); }

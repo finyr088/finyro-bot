@@ -363,6 +363,59 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .aproof { max-width: 100%; border-radius: 12px; margin-top: 10px; display: block; }
 .ahint { color: #7a7a7a; font-size: 12px; }
 
+/* ==================== ДЕСКТОП-ВЕРСИЯ ==================== */
+@media (min-width: 900px) {
+  :root { --nav-h: 0px; }
+  #app { padding-bottom: 40px; }
+
+  /* Шапка шире */
+  .bar-inner { max-width: 1120px; padding: 16px 36px; }
+  .brand { font-size: 21px; }
+
+  /* Нижнее меню → боковая панель слева */
+  .nav {
+    top: 72px; bottom: auto; left: 0; right: auto;
+    width: 250px; height: calc(100vh - 72px);
+    box-shadow: 4px 0 24px rgba(46, 17, 120, .05);
+    padding: 22px 16px;
+  }
+  .nav-inner {
+    max-width: none; height: auto; margin: 0;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .nav button {
+    flex-direction: row; justify-content: flex-start; gap: 14px;
+    padding: 14px 16px; border-radius: 14px; font-size: 15px; font-weight: 700;
+  }
+  .nav button .ic svg { width: 23px; height: 23px; }
+  .nav button.active { background: var(--lavender); }
+  .nav button.active .ic { transform: none; }
+  .nav button.active::after { display: none; }
+
+  /* Контент — справа от панели, шире и по центру свободной области */
+  #screens { margin-left: 250px; max-width: none; }
+  .screen { max-width: 960px; margin: 0 auto; padding: 34px 44px; }
+  h1.title { font-size: 30px; }
+
+  /* Списки карточек — в сетку по колонкам */
+  .cards, #home-new {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;
+  }
+  .cards .card, #home-new .card { margin-bottom: 0; }
+
+  /* Статистика крупнее */
+  .stat .num { font-size: 32px; }
+
+  /* Плеер и профиль — комфортная ширина */
+  #screen-detail .player-wrap, #screen-detail > .card,
+  #screen-profile .status-card { max-width: 720px; }
+  #screen-detail .title, #screen-profile .title { max-width: 720px; }
+
+  /* Админ-панель — шире */
+  .admin-bar, .atabs, .ascreen { max-width: 1000px; }
+  .astats { grid-template-columns: repeat(6, 1fr); }
+}
+
 /* ── Тёмная тема (выбор пользователя через data-theme=dark) ── */
 :root[data-theme="dark"] {
   --bg: #17131f; --card: #221b30; --text: #f3f0fb; --muted: #a99fc0;
