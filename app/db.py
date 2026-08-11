@@ -21,12 +21,31 @@ class Base(DeclarativeBase):
     pass
 
 
+def _migrate(sync_conn) -> None:
+    """Лёгкие аддитивные миграции для SQLite: добавляем недостающие колонки
+    в уже существующие таблицы (create_all этого не делает)."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(sync_conn)
+    tables = set(insp.get_table_names())
+    additions = [
+        ("materials", "topic_id", "INTEGER"),
+    ]
+    for table, col, coltype in additions:
+        if table not in tables:
+            continue
+        cols = {c["name"] for c in insp.get_columns(table)}
+        if col not in cols:
+            sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"))
+
+
 async def init_db() -> None:
-    """Создаёт таблицы, которых ещё нет."""
+    """Создаёт таблицы, которых ещё нет, и добавляет недостающие колонки."""
     from . import models  # noqa: F401  — регистрируем модели в метаданных
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_migrate)
 
 
 @asynccontextmanager

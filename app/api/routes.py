@@ -19,8 +19,10 @@ from ..models import (
     Material,
     MaterialKind,
     MaterialStatus,
+    Section,
     Test,
     TestAttempt,
+    Topic,
     User,
     utcnow,
 )
@@ -177,7 +179,32 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
     }
 
 
-# --- Вебинары ---
+# --- Вебинары: разделы → темы → видео ---
+
+@router.get("/sections")
+async def list_sections(user: User = Depends(require_access), session: AsyncSession = Depends(get_session)):
+    return {"sections": await services.visible_sections(session)}
+
+
+@router.get("/sections/{section_id}/topics")
+async def section_topics(section_id: int, user: User = Depends(require_access), session: AsyncSession = Depends(get_session)):
+    section = await session.get(Section, section_id)
+    if section is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Раздел не найден")
+    return {"section": {"id": section.id, "title": section.title},
+            "topics": await services.visible_topics(session, section_id)}
+
+
+@router.get("/topics/{topic_id}/videos")
+async def topic_videos(topic_id: int, user: User = Depends(require_access), session: AsyncSession = Depends(get_session)):
+    topic = await session.get(Topic, topic_id)
+    if topic is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Тема не найдена")
+    return {"topic": {"id": topic.id, "title": topic.title, "section_id": topic.section_id},
+            "videos": await services.visible_topic_videos(session, topic_id, user.id)}
+
+
+# --- Вебинары (плоский список — для «продолжить» и «новое» на главной) ---
 
 @router.get("/videos")
 async def list_videos(user: User = Depends(require_access), session: AsyncSession = Depends(get_session)):
@@ -225,9 +252,10 @@ async def get_video(
     return {
         "id": mat.id,
         "title": mat.title,
-        "description": mat.description,
+        "description": mat.description,   # комментарий к видео
         "stream_url": stream_url,
         "watched": bool(watched and watched.watched),
+        "attachments": await services.video_attachments(session, mat.id),
         # Данные для динамического водяного знака поверх видео
         "watermark": f"{user.full_name} · id{user.telegram_id}",
     }

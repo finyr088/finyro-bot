@@ -276,6 +276,19 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .seg button { flex: 1; border: none; background: transparent; padding: 11px 6px; border-radius: 11px; font-weight: 700; font-size: 13px; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--violet-500); color: #fff; }
 
+/* ── Папки вебинаров и вложения ──────────────────────── */
+.card.folder { display: flex; align-items: center; gap: 14px; }
+.folder-ic { font-size: 28px; flex: 0 0 auto; line-height: 1; }
+.chev { color: var(--muted); font-size: 22px; font-weight: 700; flex: 0 0 auto; }
+.attach {
+  display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text);
+  background: var(--card); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+  box-shadow: var(--shadow-sm); font-weight: 600; transition: transform .12s ease;
+}
+.attach:active { transform: scale(.99); }
+.attach-ic { font-size: 20px; flex: 0 0 auto; }
+.attach .chev { font-size: 16px; }
+
 /* ── Экран входа по коду (браузер) ───────────────────── */
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .login-card { width: 100%; max-width: 380px; background: var(--card); border-radius: var(--radius); padding: 34px 26px; box-shadow: var(--shadow); text-align: center; }

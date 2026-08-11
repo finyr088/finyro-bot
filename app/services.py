@@ -17,15 +17,18 @@ from sqlalchemy.orm import selectinload
 from .config import settings
 from .models import (
     AdminLog,
+    Attachment,
     Material,
     MaterialKind,
     MaterialProgress,
     MaterialStatus,
     Payment,
     PaymentStatus,
+    Section,
     SupportMessage,
     Test,
     TestAttempt,
+    Topic,
     User,
     utcnow,
 )
@@ -164,6 +167,87 @@ async def all_materials(session: AsyncSession, kind: str | None = None) -> list[
     if kind:
         stmt = stmt.where(Material.kind == kind)
     return list(await session.scalars(stmt))
+
+
+# --- Иерархия вебинаров: разделы → темы → видео → вложения ---
+
+async def _visible_videos_by_topic(session: AsyncSession, now: datetime) -> dict[int, list[Material]]:
+    videos = await session.scalars(
+        select(Material).where(Material.kind == MaterialKind.VIDEO)
+        .order_by(Material.order_index.asc(), Material.id.asc())
+    )
+    by_topic: dict[int, list[Material]] = {}
+    for v in videos:
+        if v.topic_id is not None and v.is_visible(now):
+            by_topic.setdefault(v.topic_id, []).append(v)
+    return by_topic
+
+
+async def visible_sections(session: AsyncSession) -> list[dict]:
+    """Разделы, в которых есть хотя бы одно опубликованное видео."""
+    now = utcnow()
+    by_topic = await _visible_videos_by_topic(session, now)
+    topics = list(await session.scalars(select(Topic)))
+    sections = list(await session.scalars(select(Section).order_by(Section.order_index.asc(), Section.id.asc())))
+    out = []
+    for s in sections:
+        s_topics = [t for t in topics if t.section_id == s.id and by_topic.get(t.id)]
+        vids = sum(len(by_topic.get(t.id, [])) for t in s_topics)
+        if vids:
+            out.append({"id": s.id, "title": s.title, "topics": len(s_topics), "videos": vids})
+    return out
+
+
+async def visible_topics(session: AsyncSession, section_id: int) -> list[dict]:
+    now = utcnow()
+    by_topic = await _visible_videos_by_topic(session, now)
+    topics = list(await session.scalars(
+        select(Topic).where(Topic.section_id == section_id).order_by(Topic.order_index.asc(), Topic.id.asc())
+    ))
+    return [
+        {"id": t.id, "title": t.title, "videos": len(by_topic.get(t.id, []))}
+        for t in topics if by_topic.get(t.id)
+    ]
+
+
+async def visible_topic_videos(session: AsyncSession, topic_id: int, user_id: int) -> list[dict]:
+    now = utcnow()
+    vids = list(await session.scalars(
+        select(Material).where(Material.kind == MaterialKind.VIDEO, Material.topic_id == topic_id)
+        .order_by(Material.order_index.asc(), Material.id.asc())
+    ))
+    watched = await watched_material_ids(session, user_id)
+    return [
+        {"id": v.id, "title": v.title, "watched": v.id in watched}
+        for v in vids if v.is_visible(now)
+    ]
+
+
+async def video_attachments(session: AsyncSession, material_id: int) -> list[dict]:
+    rows = await session.scalars(
+        select(Attachment).where(Attachment.material_id == material_id)
+        .order_by(Attachment.order_index.asc(), Attachment.id.asc())
+    )
+    return [{"id": a.id, "title": a.title, "url": a.url, "kind": a.kind} for a in rows]
+
+
+# --- Иерархия для админки (без фильтра по статусу) ---
+
+async def admin_sections(session: AsyncSession) -> list[Section]:
+    return list(await session.scalars(select(Section).order_by(Section.order_index.asc(), Section.id.asc())))
+
+
+async def admin_topics(session: AsyncSession, section_id: int) -> list[Topic]:
+    return list(await session.scalars(
+        select(Topic).where(Topic.section_id == section_id).order_by(Topic.order_index.asc(), Topic.id.asc())
+    ))
+
+
+async def admin_topic_videos(session: AsyncSession, topic_id: int) -> list[Material]:
+    return list(await session.scalars(
+        select(Material).where(Material.kind == MaterialKind.VIDEO, Material.topic_id == topic_id)
+        .order_by(Material.order_index.asc(), Material.id.asc())
+    ))
 
 
 async def upcoming_materials(session: AsyncSession, kind: str) -> list[Material]:

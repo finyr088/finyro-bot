@@ -416,24 +416,67 @@
   }
 
   // --- Вебинары ---
-  async function loadVideos(el) {
+  // Навигация по папкам: разделы → темы → видео
+  let webinarNav = { level: "sections" };
+
+  const folderCard = (icon, title, sub, attr, id, dataTitle) => `
+    <div class="card tap folder" data-${attr}="${id}" data-title="${esc(dataTitle || title)}">
+      <div class="folder-ic">${icon}</div>
+      <div class="grow"><h3>${esc(title)}</h3><p>${esc(sub)}</p></div>
+      <div class="chev">›</div>
+    </div>`;
+
+  function loadVideos(el) {
+    webinarNav = { level: "sections" };   // вход из меню — всегда с разделов
+    renderWebinars(el);
+  }
+
+  function gotoVideosTab() {
+    document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+    const vel = $("#screen-videos");
+    vel.classList.add("active");
+    document.querySelectorAll(".nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === "videos"));
+    state.tab = "videos";
+    renderWebinars(vel);
+  }
+
+  async function renderWebinars(el) {
     loadingInto(el);
+    const nav = webinarNav;
     try {
-      const data = await api("/videos");
-      let html = `<h1 class="title">Вебинары</h1>`;
-      if (!data.videos.length && !data.upcoming.length) {
-        html += emptyCard("Вебинары скоро появятся.");
+      if (nav.level === "sections") {
+        const d = await api("/sections");
+        let html = `<h1 class="title">Вебинары</h1>`;
+        html += d.sections.length
+          ? d.sections.map((s) => folderCard("📁", s.title, `${s.topics} тем · ${s.videos} видео`, "sec", s.id)).join("")
+          : emptyCard("Вебинары скоро появятся.");
+        el.innerHTML = html;
+        el.querySelectorAll("[data-sec]").forEach((c) => (c.onclick = () => {
+          webinarNav = { level: "topics", sectionId: +c.dataset.sec };
+          renderWebinars(el);
+        }));
+      } else if (nav.level === "topics") {
+        const d = await api("/sections/" + nav.sectionId + "/topics");
+        let html = `<button class="back" id="wb">◀️ Разделы</button><h1 class="title" style="margin-top:10px">${esc(d.section.title)}</h1>`;
+        html += d.topics.length
+          ? d.topics.map((t) => folderCard("📂", t.title, `${t.videos} видео`, "top", t.id)).join("")
+          : emptyCard("В этом разделе пока нет тем.");
+        el.innerHTML = html;
+        $("#wb", el).onclick = () => { webinarNav = { level: "sections" }; renderWebinars(el); };
+        el.querySelectorAll("[data-top]").forEach((c) => (c.onclick = () => {
+          webinarNav = { level: "videos", sectionId: nav.sectionId, topicId: +c.dataset.top };
+          renderWebinars(el);
+        }));
+      } else if (nav.level === "videos") {
+        const d = await api("/topics/" + nav.topicId + "/videos");
+        let html = `<button class="back" id="wb">◀️ Темы</button><h1 class="title" style="margin-top:10px">${esc(d.topic.title)}</h1>`;
+        html += d.videos.length
+          ? d.videos.map((v) => `<div class="card tap" data-vid="${v.id}"><div class="row"><div class="grow"><h3>🎬 ${esc(v.title)}</h3></div>${v.watched ? '<span class="badge done">просмотрено</span>' : '<span class="badge todo">смотреть</span>'}</div></div>`).join("")
+          : emptyCard("В этой теме пока нет видео.");
+        el.innerHTML = html;
+        $("#wb", el).onclick = () => { webinarNav = { level: "topics", sectionId: nav.sectionId }; renderWebinars(el); };
+        el.querySelectorAll("[data-vid]").forEach((c) => (c.onclick = () => openVideo(+c.dataset.vid)));
       }
-      data.videos.forEach((v) => {
-        const badge = v.watched ? '<span class="badge done">просмотрено</span>' : '<span class="badge todo">не начато</span>';
-        html += `<div class="card tap" data-vid="${v.id}"><div class="row"><div class="grow"><h3>${esc(v.title)}</h3><p>${esc(v.description || "")}</p></div>${badge}</div></div>`;
-      });
-      data.upcoming.forEach((v) => {
-        const when = v.publish_at ? new Date(v.publish_at).toLocaleDateString("ru-RU") : "";
-        html += `<div class="card"><div class="row"><div class="grow"><h3 style="opacity:.7">${esc(v.title)}</h3><p>Скоро${when ? " · " + when : ""}</p></div><span class="badge soon">скоро</span></div></div>`;
-      });
-      el.innerHTML = html;
-      el.querySelectorAll("[data-vid]").forEach((c) => (c.onclick = () => openVideo(+c.dataset.vid)));
     } catch (e) { errCard(el, e); }
   }
 
@@ -451,9 +494,14 @@
           <video id="vid" controls playsinline preload="metadata"
             controlslist="nodownload noremoteplayback" disablepictureinpicture></video>
         </div>
-        <p class="muted" style="margin:12px 2px">${esc(v.description || "")}</p>
-        <button class="btn" id="watchBtn">${v.watched ? "✓ Просмотрено" : "Отметить просмотренным"}</button>`;
-      $("#back", el).onclick = () => showTab("videos");
+        ${v.description ? `<p class="muted" style="margin:12px 2px">${esc(v.description)}</p>` : ""}
+        <button class="btn" id="watchBtn">${v.watched ? "✓ Просмотрено" : "Отметить просмотренным"}</button>
+        ${v.attachments && v.attachments.length ? `
+          <h2 class="section">Материалы</h2>
+          ${v.attachments.map((a) => `<a class="attach" href="${esc(a.url)}" target="_blank" rel="noopener">
+            <span class="attach-ic">${a.kind === "presentation" ? "📊" : a.kind === "link" ? "🔗" : "📎"}</span>
+            <span class="grow">${esc(a.title)}</span><span class="chev">↗</span></a>`).join("")}` : ""}`;
+      $("#back", el).onclick = gotoVideosTab;
       setupPlayer($("#vid", el), $("#wm", el), $("#pw", el), v.stream_url);
       const wb = $("#watchBtn", el);
       const mark = async () => {
@@ -605,8 +653,8 @@
   // ==================== АДМИН-ПАНЕЛЬ ====================
   const A_TABS = [
     ["overview", "Обзор"], ["payments", "Заявки"], ["students", "Ученики"],
-    ["content", "Контент"], ["schedule", "Расписание"], ["tests", "Тесты"],
-    ["support", "Поддержка"], ["broadcast", "Рассылка"], ["results", "Результаты"],
+    ["webinars", "Вебинары"], ["content", "Контент"], ["schedule", "Расписание"],
+    ["tests", "Тесты"], ["support", "Поддержка"], ["broadcast", "Рассылка"], ["results", "Результаты"],
   ];
 
   async function authBlob(path) {
@@ -649,8 +697,9 @@
     document.querySelectorAll(".atab").forEach((b) => b.classList.toggle("active", b.dataset.a === name));
     const el = $("#ascreen");
     ({
-      overview: aOverview, payments: aPayments, students: aStudents, content: aContent,
-      schedule: aSchedule, tests: aTests, support: aSupport, broadcast: aBroadcast, results: aResults,
+      overview: aOverview, payments: aPayments, students: aStudents, webinars: aWebinars,
+      content: aContent, schedule: aSchedule, tests: aTests, support: aSupport,
+      broadcast: aBroadcast, results: aResults,
     })[name](el);
   }
 
@@ -739,6 +788,188 @@
     let t;
     $("#ssearch", el).oninput = (ev) => { clearTimeout(t); t = setTimeout(() => load(ev.target.value.trim()), 350); };
     load("");
+  }
+
+  // --- Вебинары (админ): разделы → темы → видео → вложения ---
+  let adminWebNav = { level: "sections" };
+
+  function aWebinars(el) {
+    adminWebNav = { level: "sections" };
+    renderAdminWeb(el);
+  }
+
+  async function renderAdminWeb(el) {
+    aLoad(el);
+    const nav = adminWebNav;
+    try {
+      if (nav.level === "sections") {
+        const d = await api("/admin/sections");
+        el.innerHTML = `
+          <button class="abtn ok" id="addsec" style="margin-bottom:14px">➕ Добавить раздел</button>
+          <div id="secform"></div>
+          <div id="seclist">${d.sections.map((s) => `
+            <div class="acard">
+              <h4>📁 ${esc(s.title)}</h4><p>${s.topics} тем</p>
+              <div class="arow">
+                <button class="abtn ok" data-opensec="${s.id}" data-title="${esc(s.title)}">Открыть</button>
+                <button class="abtn del" data-delsec="${s.id}">Удалить</button>
+              </div>
+            </div>`).join("") || '<div class="acard"><p>Разделов пока нет. Создайте первый — напр. «Отборочный этап».</p></div>'}</div>`;
+        $("#addsec", el).onclick = () => renderNameForm($("#secform", el), "Название раздела (напр. Отборочный этап)", async (title) => {
+          await api("/admin/sections", { method: "POST", body: { title } }); renderAdminWeb(el);
+        });
+        el.querySelectorAll("[data-opensec]").forEach((b) => (b.onclick = () => { adminWebNav = { level: "topics", sectionId: +b.dataset.opensec, sectionTitle: b.dataset.title }; renderAdminWeb(el); }));
+        el.querySelectorAll("[data-delsec]").forEach((b) => (b.onclick = () => delThen("Удалить раздел со всеми темами?", "/admin/sections/" + b.dataset.delsec, el)));
+
+      } else if (nav.level === "topics") {
+        const d = await api("/admin/sections/" + nav.sectionId + "/topics");
+        el.innerHTML = `
+          <button class="abtn sec" id="wback" style="margin-bottom:12px">◀️ Разделы</button>
+          <h4 style="margin:0 0 12px">📁 ${esc(nav.sectionTitle || "")}</h4>
+          <button class="abtn ok" id="addtop" style="margin-bottom:14px">➕ Добавить тему</button>
+          <div id="topform"></div>
+          <div>${d.topics.map((t) => `
+            <div class="acard">
+              <h4>📂 ${esc(t.title)}</h4><p>${t.videos} видео</p>
+              <div class="arow">
+                <button class="abtn ok" data-opentop="${t.id}" data-title="${esc(t.title)}">Открыть</button>
+                <button class="abtn del" data-deltop="${t.id}">Удалить</button>
+              </div>
+            </div>`).join("") || '<div class="acard"><p>Тем пока нет.</p></div>'}</div>`;
+        $("#wback", el).onclick = () => { adminWebNav = { level: "sections" }; renderAdminWeb(el); };
+        $("#addtop", el).onclick = () => renderNameForm($("#topform", el), "Название темы", async (title) => {
+          await api("/admin/topics", { method: "POST", body: { section_id: nav.sectionId, title } }); renderAdminWeb(el);
+        });
+        el.querySelectorAll("[data-opentop]").forEach((b) => (b.onclick = () => { adminWebNav = { ...nav, level: "videos", topicId: +b.dataset.opentop, topicTitle: b.dataset.title }; renderAdminWeb(el); }));
+        el.querySelectorAll("[data-deltop]").forEach((b) => (b.onclick = () => delThen("Удалить тему?", "/admin/topics/" + b.dataset.deltop, el)));
+
+      } else if (nav.level === "videos") {
+        const d = await api("/admin/topics/" + nav.topicId + "/videos");
+        el.innerHTML = `
+          <button class="abtn sec" id="wback" style="margin-bottom:12px">◀️ Темы</button>
+          <h4 style="margin:0 0 12px">📂 ${esc(nav.topicTitle || "")}</h4>
+          <button class="abtn ok" id="addvid" style="margin-bottom:14px">➕ Добавить видео</button>
+          <div id="vidform"></div>
+          <div>${d.videos.map((v) => `
+            <div class="acard">
+              <h4>🎬 ${esc(v.title)}</h4><p>${v.status === "published" ? "🟢 опубликовано" : "⚪️ черновик"} · 📎 ${v.attachments}</p>
+              <div class="arow">
+                ${v.status === "published" ? `<button class="abtn sec" data-unpub="${v.id}">Снять</button>` : `<button class="abtn ok" data-pub="${v.id}">Опубликовать</button>`}
+                <button class="abtn sec" data-att="${v.id}" data-title="${esc(v.title)}">📎 Материалы</button>
+                <button class="abtn del" data-delvid="${v.id}">Удалить</button>
+              </div>
+            </div>`).join("") || '<div class="acard"><p>Видео пока нет.</p></div>'}</div>`;
+        $("#wback", el).onclick = () => { adminWebNav = { level: "topics", sectionId: nav.sectionId, sectionTitle: nav.sectionTitle }; renderAdminWeb(el); };
+        $("#addvid", el).onclick = () => renderAdminVideoForm($("#vidform", el), el, nav.topicId);
+        el.querySelectorAll("[data-pub]").forEach((b) => (b.onclick = () => postThen("/admin/materials/" + b.dataset.pub + "/publish", el)));
+        el.querySelectorAll("[data-unpub]").forEach((b) => (b.onclick = () => postThen("/admin/materials/" + b.dataset.unpub + "/unpublish", el)));
+        el.querySelectorAll("[data-delvid]").forEach((b) => (b.onclick = () => delThen("Удалить видео?", "/admin/materials/" + b.dataset.delvid, el)));
+        el.querySelectorAll("[data-att]").forEach((b) => (b.onclick = () => { adminWebNav = { ...nav, level: "attachments", materialId: +b.dataset.att, materialTitle: b.dataset.title }; renderAdminWeb(el); }));
+
+      } else if (nav.level === "attachments") {
+        const d = await api("/admin/attachments?material_id=" + nav.materialId);
+        el.innerHTML = `
+          <button class="abtn sec" id="wback" style="margin-bottom:12px">◀️ Видео</button>
+          <h4 style="margin:0 0 12px">🎬 ${esc(nav.materialTitle || "")}</h4>
+          <button class="abtn ok" id="addatt" style="margin-bottom:14px">➕ Добавить материал</button>
+          <div id="attform"></div>
+          <div>${d.attachments.map((a) => `
+            <div class="acard">
+              <h4>${a.kind === "presentation" ? "📊" : a.kind === "link" ? "🔗" : "📎"} ${esc(a.title)}</h4>
+              <p style="word-break:break-all">${esc(a.url)}</p>
+              <div class="arow"><button class="abtn del" data-delatt="${a.id}">Удалить</button></div>
+            </div>`).join("") || '<div class="acard"><p>Вложений пока нет.</p></div>'}</div>`;
+        $("#wback", el).onclick = () => { adminWebNav = { level: "videos", sectionId: nav.sectionId, sectionTitle: nav.sectionTitle, topicId: nav.topicId, topicTitle: nav.topicTitle }; renderAdminWeb(el); };
+        $("#addatt", el).onclick = () => renderAttForm($("#attform", el), el, nav.materialId);
+        el.querySelectorAll("[data-delatt]").forEach((b) => (b.onclick = () => delThen("Удалить вложение?", "/admin/attachments/" + b.dataset.delatt, el)));
+      }
+    } catch (e) { aErr(el, e); }
+  }
+
+  // Общие мини-хелперы админ-вебинаров
+  function renderNameForm(box, placeholder, onSave) {
+    box.innerHTML = `<div class="acard">
+      <input class="ainput" id="nfval" placeholder="${esc(placeholder)}">
+      <div class="arow"><button class="abtn ok" id="nfsave">Создать</button><button class="abtn sec" id="nfcancel">Отмена</button></div>
+    </div>`;
+    $("#nfcancel", box).onclick = () => (box.innerHTML = "");
+    $("#nfsave", box).onclick = async () => {
+      const v = $("#nfval", box).value.trim();
+      if (!v) { toast("Введите название"); return; }
+      try { await onSave(v); toast("Готово ✅"); } catch (e) { toast(e.message); }
+    };
+  }
+  async function delThen(confirmMsg, path, el) {
+    if (!confirm(confirmMsg)) return;
+    try { await api(path, { method: "DELETE" }); toast("Удалено"); renderAdminWeb(el); } catch (e) { toast(e.message); }
+  }
+  async function postThen(path, el) {
+    try { await api(path, { method: "POST" }); toast("Готово"); renderAdminWeb(el); } catch (e) { toast(e.message); }
+  }
+
+  function renderAdminVideoForm(box, el, topicId) {
+    box.innerHTML = `<div class="acard">
+      <input class="ainput" id="vtitle" placeholder="Название видео">
+      <p class="ahint" style="margin:0 0 6px">Загрузите MP4:</p>
+      <input class="ainput" type="file" id="vfile" accept="video/mp4,video/quicktime,video/*">
+      <p class="ahint" style="margin:-2px 0 6px">— или ссылка на поток —</p>
+      <input class="ainput" id="vurl" placeholder="HLS .m3u8 / mp4 (необязательно)">
+      <textarea class="aarea" id="vdesc" placeholder="Комментарий к видео (необязательно)"></textarea>
+      <div class="arow"><button class="abtn ok" id="vsave">Создать (черновик)</button><button class="abtn sec" id="vcancel">Отмена</button></div>
+      <p class="ahint" id="vstatus"></p>
+    </div>`;
+    $("#vcancel", box).onclick = () => (box.innerHTML = "");
+    $("#vsave", box).onclick = async () => {
+      const title = $("#vtitle", box).value.trim();
+      if (!title) { toast("Введите название"); return; }
+      const file = $("#vfile", box).files[0];
+      const url = $("#vurl", box).value.trim();
+      const desc = $("#vdesc", box).value.trim();
+      const save = $("#vsave", box), st = $("#vstatus", box);
+      if (file) {
+        const fd = new FormData();
+        fd.append("title", title); fd.append("description", desc); fd.append("topic_id", topicId); fd.append("file", file);
+        save.disabled = true; st.textContent = "⏳ Загрузка видео… не закрывайте окно";
+        try { const r = await apiForm("/admin/materials/upload", fd); toast(`Видео загружено (${r.size_mb} МБ) ✅`); renderAdminWeb(el); }
+        catch (e) { toast(e.message); save.disabled = false; st.textContent = ""; }
+      } else if (url) {
+        try { await api("/admin/materials", { method: "POST", body: { kind: "video", title, stream_url: url, description: desc, topic_id: topicId } }); toast("Создано ✅"); renderAdminWeb(el); }
+        catch (e) { toast(e.message); }
+      } else { toast("Загрузите файл MP4 или вставьте ссылку"); }
+    };
+  }
+
+  function renderAttForm(box, el, materialId) {
+    box.innerHTML = `<div class="acard">
+      <select class="asel" id="atkind">
+        <option value="presentation">📊 Презентация</option>
+        <option value="file">📎 Материал (файл)</option>
+        <option value="link">🔗 Ссылка</option>
+      </select>
+      <input class="ainput" id="attitle" placeholder="Название (напр. Презентация урока)">
+      <p class="ahint" style="margin:0 0 6px">Загрузите файл:</p>
+      <input class="ainput" type="file" id="atfile">
+      <p class="ahint" style="margin:-2px 0 6px">— или ссылка —</p>
+      <input class="ainput" id="aturl" placeholder="https://… (необязательно)">
+      <div class="arow"><button class="abtn ok" id="atsave">Добавить</button><button class="abtn sec" id="atcancel">Отмена</button></div>
+      <p class="ahint" id="atstatus"></p>
+    </div>`;
+    $("#atcancel", box).onclick = () => (box.innerHTML = "");
+    $("#atsave", box).onclick = async () => {
+      const title = $("#attitle", box).value.trim();
+      if (!title) { toast("Введите название"); return; }
+      const file = $("#atfile", box).files[0];
+      const url = $("#aturl", box).value.trim();
+      if (!file && !url) { toast("Прикрепите файл или укажите ссылку"); return; }
+      const fd = new FormData();
+      fd.append("material_id", materialId); fd.append("title", title); fd.append("kind", $("#atkind", box).value);
+      if (url) fd.append("url", url);
+      if (file) fd.append("file", file);
+      const save = $("#atsave", box), st = $("#atstatus", box);
+      save.disabled = true; st.textContent = "⏳ Загрузка…";
+      try { await apiForm("/admin/attachments", fd); toast("Добавлено ✅"); renderAdminWeb(el); }
+      catch (e) { toast(e.message); save.disabled = false; st.textContent = ""; }
+    };
   }
 
   // --- Контент ---

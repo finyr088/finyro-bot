@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from ..config import settings
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import services
@@ -21,11 +21,14 @@ from ..bot import texts as bot_texts
 from ..bot import keyboards as bot_kb
 from ..db import get_session
 from ..models import (
+    Attachment,
     Event,
     Material,
     MaterialKind,
     MaterialStatus,
     Payment,
+    Section,
+    Topic,
     PaymentStatus,
     Question,
     SupportMessage,
@@ -48,6 +51,7 @@ class MaterialIn(BaseModel):
     description: str | None = None
     content: str | None = None
     stream_url: str | None = None
+    topic_id: int | None = None
 
 
 class QuestionIn(BaseModel):
@@ -60,6 +64,15 @@ class TestIn(BaseModel):
     title: str
     description: str | None = None
     questions: list[QuestionIn]
+
+
+class SectionIn(BaseModel):
+    title: str
+
+
+class TopicIn(BaseModel):
+    section_id: int
+    title: str
 
 
 class EventIn(BaseModel):
@@ -214,6 +227,7 @@ async def create_material(body: MaterialIn, session: AsyncSession = Depends(get_
         kind=body.kind, title=body.title.strip(),
         description=body.description, content=body.content,
         stream_url=body.stream_url, status=MaterialStatus.DRAFT, order_index=order,
+        topic_id=body.topic_id if body.kind == MaterialKind.VIDEO else None,
     )
     session.add(m)
     await session.commit()
@@ -227,6 +241,7 @@ _VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm"}
 async def upload_video(
     title: str = Form(...),
     description: str = Form(""),
+    topic_id: int | None = Form(None),
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
 ):
@@ -270,6 +285,7 @@ async def upload_video(
         kind=MaterialKind.VIDEO, title=title.strip(),
         description=description.strip() or None,
         stream_url=f"upload:{fname}", status=MaterialStatus.DRAFT, order_index=order,
+        topic_id=topic_id,
     )
     session.add(m)
     await session.commit()
@@ -300,6 +316,157 @@ async def delete_material(material_id: int, session: AsyncSession = Depends(get_
     if m.stream_url and m.stream_url.startswith("upload:"):
         (Path(settings.MEDIA_DIR) / m.stream_url[len("upload:"):]).unlink(missing_ok=True)
     await session.delete(m)
+    await session.commit()
+    return {"ok": True}
+
+
+# ─────────────────────────── Вебинары: разделы/темы/вложения ──
+
+@router.get("/sections")
+async def list_sections_admin(session: AsyncSession = Depends(get_session)):
+    sections = await services.admin_sections(session)
+    out = []
+    for s in sections:
+        n_topics = await session.scalar(select(func.count(Topic.id)).where(Topic.section_id == s.id)) or 0
+        out.append({"id": s.id, "title": s.title, "topics": n_topics})
+    return {"sections": out}
+
+
+@router.post("/sections")
+async def create_section(body: SectionIn, session: AsyncSession = Depends(get_session)):
+    if not body.title.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Введите название раздела")
+    order = (await session.scalar(select(func.max(Section.order_index))) or 0) + 1
+    s = Section(title=body.title.strip(), order_index=order)
+    session.add(s)
+    await session.commit()
+    return {"ok": True, "id": s.id}
+
+
+@router.delete("/sections/{section_id}")
+async def delete_section(section_id: int, session: AsyncSession = Depends(get_session)):
+    s = await session.get(Section, section_id)
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Раздел не найден")
+    topic_ids = [t.id for t in await services.admin_topics(session, section_id)]
+    if topic_ids:
+        await session.execute(update(Material).where(Material.topic_id.in_(topic_ids)).values(topic_id=None))
+        await session.execute(Topic.__table__.delete().where(Topic.section_id == section_id))
+    await session.delete(s)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.get("/sections/{section_id}/topics")
+async def list_topics_admin(section_id: int, session: AsyncSession = Depends(get_session)):
+    topics = await services.admin_topics(session, section_id)
+    out = []
+    for t in topics:
+        n = await session.scalar(
+            select(func.count(Material.id)).where(Material.kind == MaterialKind.VIDEO, Material.topic_id == t.id)
+        ) or 0
+        out.append({"id": t.id, "title": t.title, "videos": n})
+    return {"topics": out}
+
+
+@router.post("/topics")
+async def create_topic(body: TopicIn, session: AsyncSession = Depends(get_session)):
+    if not body.title.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Введите название темы")
+    if await session.get(Section, body.section_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Раздел не найден")
+    order = (await session.scalar(select(func.max(Topic.order_index)).where(Topic.section_id == body.section_id)) or 0) + 1
+    t = Topic(section_id=body.section_id, title=body.title.strip(), order_index=order)
+    session.add(t)
+    await session.commit()
+    return {"ok": True, "id": t.id}
+
+
+@router.delete("/topics/{topic_id}")
+async def delete_topic(topic_id: int, session: AsyncSession = Depends(get_session)):
+    t = await session.get(Topic, topic_id)
+    if t is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Тема не найдена")
+    await session.execute(update(Material).where(Material.topic_id == topic_id).values(topic_id=None))
+    await session.delete(t)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.get("/topics/{topic_id}/videos")
+async def list_topic_videos_admin(topic_id: int, session: AsyncSession = Depends(get_session)):
+    vids = await services.admin_topic_videos(session, topic_id)
+    out = []
+    for v in vids:
+        n_att = await session.scalar(select(func.count(Attachment.id)).where(Attachment.material_id == v.id)) or 0
+        out.append({"id": v.id, "title": v.title, "status": v.status, "attachments": n_att,
+                    "uploaded": bool(v.stream_url and v.stream_url.startswith("upload:"))})
+    return {"videos": out}
+
+
+# --- Вложения к видео ---
+
+@router.get("/attachments")
+async def list_attachments(material_id: int, session: AsyncSession = Depends(get_session)):
+    return {"attachments": await services.video_attachments(session, material_id)}
+
+
+@router.post("/attachments")
+async def add_attachment(
+    material_id: int = Form(...),
+    title: str = Form(...),
+    kind: str = Form("file"),
+    url: str = Form(""),
+    file: UploadFile | None = File(None),
+    session: AsyncSession = Depends(get_session),
+):
+    mat = await session.get(Material, material_id)
+    if mat is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Видео не найдено")
+    if not title.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Введите название вложения")
+
+    final_url = url.strip()
+    if file is not None and file.filename:
+        media_dir = Path(settings.MEDIA_DIR)
+        media_dir.mkdir(parents=True, exist_ok=True)
+        ext = os.path.splitext(file.filename)[1].lower()
+        fname = uuid.uuid4().hex + ext
+        dest = media_dir / fname
+        max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+        written = 0
+        try:
+            with open(dest, "wb") as out:
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > max_bytes:
+                        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"Файл больше {settings.MAX_UPLOAD_MB} МБ")
+                    out.write(chunk)
+        except HTTPException:
+            dest.unlink(missing_ok=True)
+            raise
+        final_url = f"/media/{fname}"
+    if not final_url:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Прикрепите файл или укажите ссылку")
+
+    order = (await session.scalar(select(func.max(Attachment.order_index)).where(Attachment.material_id == material_id)) or 0) + 1
+    a = Attachment(material_id=material_id, title=title.strip(), url=final_url, kind=kind or "file", order_index=order)
+    session.add(a)
+    await session.commit()
+    return {"ok": True, "id": a.id}
+
+
+@router.delete("/attachments/{attachment_id}")
+async def delete_attachment(attachment_id: int, session: AsyncSession = Depends(get_session)):
+    a = await session.get(Attachment, attachment_id)
+    if a is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вложение не найдено")
+    if a.url and a.url.startswith("/media/"):
+        (Path(settings.MEDIA_DIR) / a.url[len("/media/"):]).unlink(missing_ok=True)
+    await session.delete(a)
     await session.commit()
     return {"ok": True}
 

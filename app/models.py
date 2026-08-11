@@ -92,11 +92,47 @@ class Payment(Base):
     user: Mapped["User"] = relationship(back_populates="payments")
 
 
+class Section(Base):
+    """Раздел вебинаров верхнего уровня, напр. «Отборочный этап»."""
+    __tablename__ = "sections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(256))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Topic(Base):
+    """Тема внутри раздела; содержит видео."""
+    __tablename__ = "topics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    section_id: Mapped[int] = mapped_column(ForeignKey("sections.id"), index=True)
+    title: Mapped[str] = mapped_column(String(256))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Attachment(Base):
+    """Вложение к видео: презентация, полезный материал или ссылка."""
+    __tablename__ = "attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"), index=True)
+    title: Mapped[str] = mapped_column(String(256))
+    url: Mapped[str] = mapped_column(Text)          # /media/<файл> или внешняя ссылка
+    kind: Mapped[str] = mapped_column(String(16), default="file")  # presentation | file | link
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Material(Base):
     __tablename__ = "materials"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     kind: Mapped[str] = mapped_column(String(16), default=MaterialKind.VIDEO, index=True)
+    # Видео может принадлежать теме (topic_id); теория — нет.
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("topics.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(256))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)   # текст теории
