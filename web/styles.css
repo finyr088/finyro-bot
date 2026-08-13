@@ -479,10 +479,9 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
   /* Статистика крупнее */
   .stat .num { font-size: 32px; }
 
-  /* Плеер и профиль — комфортная ширина */
-  #screen-detail .player-wrap, #screen-detail > .card,
-  #screen-profile .status-card { max-width: 720px; }
-  #screen-detail .title, #screen-profile .title { max-width: 720px; }
+  /* Страница вебинара — единая колонка: видео и все кнопки одной ширины */
+  #screen-detail > * { max-width: 880px; }
+  #screen-profile .status-card, #screen-profile .title { max-width: 720px; }
 
   /* Админ-панель — шире */
   .admin-bar, .atabs, .ascreen { max-width: 1000px; }
