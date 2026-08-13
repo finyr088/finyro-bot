@@ -295,6 +295,24 @@ async def get_theory(
     return {"id": mat.id, "title": mat.title, "content": mat.content or ""}
 
 
+# --- Рейтинг активных ---
+
+@router.get("/leaderboard")
+async def leaderboard(user: User = Depends(require_access), session: AsyncSession = Depends(get_session)):
+    board = await services.leaderboard(session)
+    me_row = next((r for r in board if r["user_id"] == user.id), None)
+    top = [
+        {"rank": r["rank"], "name": r["name"], "points": r["points"],
+         "videos": r["videos"], "tests": r["tests"], "is_me": r["user_id"] == user.id}
+        for r in board[:20]
+    ]
+    return {
+        "leaderboard": top,
+        "me": {"rank": me_row["rank"], "points": me_row["points"]} if me_row else {"rank": None, "points": 0},
+        "total": len(board),
+    }
+
+
 # --- Календарь / расписание ---
 
 @router.get("/events")

@@ -363,6 +363,21 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .aproof { max-width: 100%; border-radius: 12px; margin-top: 10px; display: block; }
 .ahint { color: #7a7a7a; font-size: 12px; }
 
+/* ── Рейтинг активных + сетка главной ────────────────── */
+.home-grid { display: flex; flex-direction: column; }
+.home-side { order: -1; }   /* рейтинг выше расписания на телефоне */
+.lb-card { padding: 8px 14px; }
+.lb-row { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+.lb-row:last-child { border-bottom: none; }
+.lb-row.me { background: var(--lavender); border-radius: 12px; padding: 12px 10px; }
+.lb-row.sep { margin-top: 8px; border-top: 1px dashed var(--line); border-bottom: none; }
+.lb-rank { width: 36px; flex: 0 0 36px; text-align: center; font-weight: 800; font-size: 16px; color: var(--violet-500); }
+.lb-name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-meta { font-size: 12px; color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
+.lb-pts { font-weight: 800; color: var(--violet-700); flex: 0 0 auto; }
+.lb-pts::after { content: " б"; font-weight: 600; color: var(--muted); font-size: 12px; }
+.btn.lb-all { margin-top: 6px; }
+
 /* ==================== ДЕСКТОП-ВЕРСИЯ ==================== */
 @media (min-width: 900px) {
   :root { --nav-h: 0px; }
@@ -394,8 +409,12 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 
   /* Контент — справа от панели, шире и по центру свободной области */
   #screens { margin-left: 250px; max-width: none; }
-  .screen { max-width: 960px; margin: 0 auto; padding: 34px 44px; }
-  h1.title { font-size: 30px; }
+  .screen { max-width: 1180px; margin: 0 auto; padding: 34px 48px; }
+  h1.title { font-size: 32px; }
+
+  /* Главная — двухколоночная: основное + рейтинг сбоку */
+  .home-grid { display: grid; grid-template-columns: 1.7fr 1fr; gap: 28px; align-items: start; }
+  .home-side { order: 0; position: sticky; top: 96px; }
 
   /* Списки карточек — в сетку по колонкам */
   .cards, #home-new {

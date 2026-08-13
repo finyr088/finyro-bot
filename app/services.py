@@ -360,6 +360,51 @@ async def progress_summary(session: AsyncSession, user: User) -> dict:
     }
 
 
+# --- Рейтинг активных ---
+
+POINTS_PER_VIDEO = 10   # за каждый просмотренный вебинар
+POINTS_PER_TEST_CORRECT = 5  # за каждый верный ответ (по лучшей попытке теста)
+
+
+async def leaderboard(session: AsyncSession) -> list[dict]:
+    """Считает баллы всех учеников: просмотры вебинаров + лучшие результаты тестов."""
+    users = list(await session.scalars(select(User)))
+
+    watched_rows = await session.scalars(
+        select(MaterialProgress.user_id).where(MaterialProgress.watched.is_(True))
+    )
+    watched_by_user: dict[int, int] = {}
+    for uid in watched_rows:
+        watched_by_user[uid] = watched_by_user.get(uid, 0) + 1
+
+    attempts = list(await session.scalars(select(TestAttempt)))
+    best: dict[tuple[int, int], int] = {}
+    tests_by_user: dict[int, set[int]] = {}
+    for a in attempts:
+        key = (a.user_id, a.test_id)
+        if a.score > best.get(key, -1):
+            best[key] = a.score
+        tests_by_user.setdefault(a.user_id, set()).add(a.test_id)
+    test_points: dict[int, int] = {}
+    for (uid, _tid), score in best.items():
+        test_points[uid] = test_points.get(uid, 0) + score
+
+    rows = []
+    for u in users:
+        wv = watched_by_user.get(u.id, 0)
+        tp = test_points.get(u.id, 0)
+        points = wv * POINTS_PER_VIDEO + tp * POINTS_PER_TEST_CORRECT
+        if points > 0:
+            rows.append({
+                "user_id": u.id, "name": u.full_name, "points": points,
+                "videos": wv, "tests": len(tests_by_user.get(u.id, set())),
+            })
+    rows.sort(key=lambda r: (-r["points"], r["name"].lower()))
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+    return rows
+
+
 # --- Тесты ---
 
 async def visible_tests(session: AsyncSession) -> list[Test]:

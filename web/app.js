@@ -235,7 +235,11 @@
   async function loadHome(el) {
     loadingInto(el);
     try {
-      const [me, videos, ev] = await Promise.all([api("/me"), api("/videos"), api("/events").catch(() => ({ events: [] }))]);
+      const [me, videos, ev, lb] = await Promise.all([
+        api("/me"), api("/videos"),
+        api("/events").catch(() => ({ events: [] })),
+        api("/leaderboard").catch(() => ({ leaderboard: [], me: { rank: null, points: 0 }, total: 0 })),
+      ]);
       const cont = me.continue;
       const newItems = videos.videos.filter((v) => !v.watched).slice(0, 3);
       let html = `<h1 class="title">Привет, ${esc(firstName(me.user.name))}! 👋</h1>`;
@@ -257,8 +261,17 @@
           <button class="btn" id="contBtn">${label}</button>`;
       }
 
-      html += `<h2 class="section">Расписание</h2><div id="cal-host"></div>`;
-      html += `<h2 class="section">Новые материалы</h2><div id="home-new"></div>`;
+      html += `
+        <div class="home-grid">
+          <div class="home-main">
+            <h2 class="section">Расписание</h2><div id="cal-host"></div>
+            <h2 class="section">Новые материалы</h2><div id="home-new"></div>
+          </div>
+          <div class="home-side">
+            <h2 class="section">🏆 Рейтинг активных</h2>
+            <div id="lb"></div>
+          </div>
+        </div>`;
       el.innerHTML = html;
 
       if (cont) {
@@ -268,6 +281,7 @@
       }
 
       mountCalendar($("#cal-host", el), ev.events || []);
+      renderLeaderboardCard($("#lb", el), lb);
 
       const box = $("#home-new", el);
       if (!newItems.length) {
@@ -281,6 +295,46 @@
           box.appendChild(c);
         });
       }
+    } catch (e) { errCard(el, e); }
+  }
+
+  // --- Рейтинг активных ---
+  const medalOf = (rank) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "#" + rank);
+  const lbRow = (r) => `
+    <div class="lb-row${r.is_me ? " me" : ""}">
+      <span class="lb-rank">${medalOf(r.rank)}</span>
+      <span class="grow lb-name">${esc(r.name)}${r.is_me ? " (вы)" : ""}</span>
+      <span class="lb-meta">${r.videos}🎬 ${r.tests}📝</span>
+      <span class="lb-pts">${r.points}</span>
+    </div>`;
+
+  function renderLeaderboardCard(box, lb) {
+    const top = (lb.leaderboard || []).slice(0, 5);
+    if (!top.length) {
+      box.innerHTML = `<div class="card"><p>Пока никто не набрал баллов. Смотри вебинары и проходи тесты — попадёшь в топ! 🚀</p></div>`;
+      return;
+    }
+    let html = `<div class="card lb-card">${top.map(lbRow).join("")}`;
+    if (lb.me && lb.me.rank && lb.me.rank > 5) {
+      html += `<div class="lb-row me sep"><span class="lb-rank">#${lb.me.rank}</span><span class="grow lb-name">Вы</span><span class="lb-pts">${lb.me.points}</span></div>`;
+    }
+    html += `<button class="btn ghost lb-all" id="lball">Весь рейтинг →</button></div>`;
+    box.innerHTML = html;
+    $("#lball", box).onclick = openLeaderboard;
+  }
+
+  async function openLeaderboard() {
+    const el = $("#screen-detail");
+    loadingInto(el);
+    showDetail();
+    try {
+      const lb = await api("/leaderboard");
+      el.innerHTML = `
+        <button class="back" id="lbback">◀️ Назад</button>
+        <h1 class="title" style="margin-top:10px">🏆 Рейтинг активных</h1>
+        <p class="muted" style="margin-bottom:14px">Баллы за просмотренные вебинары (+${10}) и верные ответы в тестах (+${5}). Всего участников: ${lb.total}.</p>
+        <div class="card lb-card">${lb.leaderboard.map(lbRow).join("") || "<p>Пока пусто.</p>"}</div>`;
+      $("#lbback", el).onclick = () => showTab("home");
     } catch (e) { errCard(el, e); }
   }
 
