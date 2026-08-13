@@ -243,46 +243,47 @@
       const cont = me.continue;
       const newItems = videos.videos.filter((v) => !v.watched).slice(0, 3);
       let html = `<h1 class="title">Привет, ${esc(firstName(me.user.name))}! 👋</h1>`;
-      html += progStrip(me.progress.course_percent || 0, me.streak || 0);
+      html += statsBand(me, lb);
 
       if (cont) {
         const label = cont.watched ? "Пересмотреть" : "Досмотреть";
-        const tag = cont.watched ? "просмотрено" : "продолжить";
+        const kicker = cont.watched ? "Продолжить просмотр" : "Продолжить с того же места";
         html += `
-          <h2 class="section">Продолжить просмотр</h2>
           <div class="card continue-card" id="cont">
             <div class="thumb">${ICONS.videos}</div>
             <div class="grow">
+              <div class="cc-kicker">${kicker}</div>
               <h3>${esc(cont.title)}</h3>
               <p>${esc(cont.description || "Вебинар курса")}</p>
-              <span class="badge ${cont.watched ? "done" : "new"}">${tag}</span>
             </div>
-            <div class="play">▶</div>
-          </div>
-          <button class="btn" id="contBtn">${label}</button>`;
+            <div class="cc-action"><span class="play">▶</span><span class="cc-cta">${label}</span></div>
+          </div>`;
       }
 
       html += `
-        <div class="home-grid">
-          <div class="home-main">
-            <h2 class="section">Расписание</h2><div id="cal-host"></div>
-            <h2 class="section">Новые материалы</h2><div id="home-new"></div>
-          </div>
-          <div class="home-side">
+        <h2 class="section">Новые материалы</h2>
+        <div id="home-new"></div>
+        <div class="duo">
+          <div class="duo-col">
             <h2 class="section">🏆 Рейтинг активных</h2>
             <div id="lb"></div>
           </div>
-        </div>`;
+          <div class="duo-col">
+            <h2 class="section">🎖 Достижения</h2>
+            <div id="home-badges"></div>
+          </div>
+        </div>
+        <h2 class="section">Расписание</h2>
+        <div id="cal-host"></div>`;
       el.innerHTML = html;
 
       if (cont) {
-        const go = () => openVideo(cont.id);
-        $("#cont", el).onclick = go;
-        $("#contBtn", el).onclick = go;
+        $("#cont", el).onclick = () => openVideo(cont.id);
       }
 
       mountCalendar($("#cal-host", el), ev.events || []);
       renderLeaderboardCard($("#lb", el), lb);
+      renderHomeBadges($("#home-badges", el), me.badges || []);
 
       const box = $("#home-new", el);
       if (!newItems.length) {
@@ -751,6 +752,31 @@
     if (b > 1 && b < 5) return few;
     if (b === 1) return one;
     return many;
+  }
+  // Плитки статистики на главной — равные блоки: серия, прогресс, место, тесты.
+  const statTile = (ic, num, label, accent) => `
+    <div class="stat-tile${accent ? " accent" : ""}">
+      <div class="st-ic">${ic}</div>
+      <div class="st-body"><div class="st-num">${num}</div><div class="st-label">${label}</div></div>
+    </div>`;
+  function statsBand(me, lb) {
+    const p = me.progress || {};
+    const streak = me.streak || 0;
+    const tests = p.tests_passed || 0;
+    const rank = (lb && lb.me && lb.me.rank) ? "#" + lb.me.rank : "—";
+    return `<div class="stats-band">
+      ${statTile("🔥", streak, streak > 0 ? plural(streak, "день подряд", "дня подряд", "дней подряд") : "нет серии", true)}
+      ${statTile("📈", (p.course_percent || 0) + "%", "курс пройден")}
+      ${statTile("🏆", rank, "в рейтинге")}
+      ${statTile("✅", tests, plural(tests, "тест пройден", "теста пройдено", "тестов пройдено"))}
+    </div>`;
+  }
+  function renderHomeBadges(box, badges) {
+    if (!badges.length) {
+      box.innerHTML = `<div class="card"><p class="muted">Смотрите вебинары и проходите тесты — открывайте достижения.</p></div>`;
+      return;
+    }
+    box.innerHTML = `<div class="card"><div class="badges">${badges.map(badgeItem).join("")}</div></div>`;
   }
   const progStrip = (percent, streak) => `
     <div class="prog-strip">

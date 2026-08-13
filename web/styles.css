@@ -364,9 +364,8 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .aproof { max-width: 100%; border-radius: 12px; margin-top: 10px; display: block; }
 .ahint { color: #7a7a7a; font-size: 12px; }
 
-/* ── Рейтинг активных + сетка главной ────────────────── */
-.home-grid { display: flex; flex-direction: column; }
-.home-side { order: -1; }   /* рейтинг выше расписания на телефоне */
+/* ── Рейтинг активных + парные блоки главной ─────────── */
+.duo-col > div { margin-bottom: 0; }
 .lb-card { padding: 8px 14px; }
 .lb-row { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--line); }
 .lb-row:last-child { border-bottom: none; }
@@ -378,6 +377,35 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .lb-pts { font-weight: 800; color: var(--violet-700); flex: 0 0 auto; }
 .lb-pts::after { content: " б"; font-weight: 600; color: var(--muted); font-size: 12px; }
 .btn.lb-all { margin-top: 6px; }
+
+/* ── Плитки статистики на главной ─────────────────────── */
+.stats-band { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stat-tile {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border-radius: 18px; padding: 15px 16px;
+  box-shadow: var(--shadow-sm); min-height: 76px;
+}
+.stat-tile .st-ic {
+  width: 44px; height: 44px; flex: 0 0 44px; border-radius: 13px;
+  background: var(--lavender); display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+}
+.stat-tile .st-body { min-width: 0; }
+.stat-tile .st-num { font-size: 23px; font-weight: 800; line-height: 1.05; letter-spacing: -.5px; color: var(--text); }
+.stat-tile .st-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.stat-tile.accent { background: linear-gradient(135deg, var(--violet-500), var(--violet-700)); box-shadow: 0 10px 24px rgba(108,60,233,.28); }
+.stat-tile.accent .st-ic { background: rgba(255,255,255,.18); }
+.stat-tile.accent .st-num { color: #fff; }
+.stat-tile.accent .st-label { color: rgba(255,255,255,.9); }
+
+/* ── Продолжить: CTA внутри карточки ──────────────────── */
+.cc-kicker { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--violet-500); margin-bottom: 4px; }
+.cc-action { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
+.cc-cta { font-size: 12px; font-weight: 800; color: var(--violet-700); white-space: nowrap; }
+
+/* ── Парные блоки (рейтинг + достижения) ──────────────── */
+.duo { display: grid; grid-template-columns: 1fr; gap: 0; }
+.duo-col { min-width: 0; }
 
 /* ── Прогресс курса + стрик ──────────────────────────── */
 .prog-strip { margin-bottom: 6px; }
@@ -434,9 +462,13 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
   .screen { max-width: 1180px; margin: 0 auto; padding: 34px 48px; }
   h1.title { font-size: 32px; }
 
-  /* Главная — двухколоночная: основное + рейтинг сбоку */
-  .home-grid { display: grid; grid-template-columns: 1.7fr 1fr; gap: 28px; align-items: start; }
-  .home-side { order: 0; position: sticky; top: 96px; }
+  /* Главная — равные полноширинные блоки, парные секции в 2 колонки */
+  .stats-band { gap: 16px; grid-template-columns: repeat(4, 1fr); }
+  .duo { grid-template-columns: 1fr 1fr; gap: 28px; align-items: stretch; }
+  .duo-col { display: flex; flex-direction: column; }
+  .duo-col > div { flex: 1; }
+  .duo-col .card { height: 100%; box-sizing: border-box; }
+  .continue-card { max-width: none; }
 
   /* Списки карточек — в сетку по колонкам */
   .cards, #home-new {
