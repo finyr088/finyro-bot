@@ -66,6 +66,10 @@ class TestIn(BaseModel):
     questions: list[QuestionIn]
 
 
+class TestImportIn(BaseModel):
+    text: str
+
+
 class SectionIn(BaseModel):
     title: str
 
@@ -598,6 +602,30 @@ async def create_test(body: TestIn, session: AsyncSession = Depends(get_session)
         ))
     await session.commit()
     return {"ok": True, "id": t.id}
+
+
+@router.post("/tests/import")
+async def import_test(body: TestImportIn, session: AsyncSession = Depends(get_session)):
+    """Создаёт тест из вставленного текста (см. app/testimport.py)."""
+    from ..testimport import TestParseError, parse_test_text
+
+    try:
+        parsed = parse_test_text(body.text)
+    except TestParseError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    order = (await session.scalar(select(func.max(Test.order_index))) or 0) + 1
+    t = Test(title=parsed["title"], description=parsed["description"],
+             status=MaterialStatus.PUBLISHED, order_index=order)
+    session.add(t)
+    await session.flush()
+    for i, q in enumerate(parsed["questions"], start=1):
+        session.add(Question(
+            test_id=t.id, text=q["text"], options=q["options"],
+            correct_index=q["correct_index"], order_index=i,
+        ))
+    await session.commit()
+    return {"ok": True, "id": t.id, "title": t.title, "questions": len(parsed["questions"])}
 
 
 @router.delete("/tests/{test_id}")

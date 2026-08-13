@@ -1300,7 +1300,10 @@
     try {
       const d = await api("/admin/tests");
       el.innerHTML = `
-        <button class="abtn ok" id="addtest" style="margin-bottom:14px">➕ Создать тест</button>
+        <div class="arow" style="margin-bottom:14px">
+          <button class="abtn ok" id="imptest">📋 Импорт из текста</button>
+          <button class="abtn sec" id="addtest">➕ Создать вручную</button>
+        </div>
         <div id="testform"></div>
         <div id="testlist">${d.tests.map((t) => `
           <div class="acard">
@@ -1310,12 +1313,55 @@
             </div>
           </div>`).join("") || '<div class="acard"><p>Тестов пока нет.</p></div>'}</div>`;
       $("#addtest", el).onclick = () => renderTestForm($("#testform", el), el);
+      $("#imptest", el).onclick = () => renderTestImport($("#testform", el), el);
       el.querySelectorAll("[data-deltest]").forEach((b) => (b.onclick = async () => {
         if (!confirm("Удалить тест?")) return;
         try { await api("/admin/tests/" + b.dataset.deltest, { method: "DELETE" }); toast("Удалено"); aTests(el); }
         catch (e) { toast(e.message); }
       }));
     } catch (e) { aErr(el, e); }
+  }
+
+  const TEST_EXAMPLE = `Тест: Кредиты
+Описание: Короткая проверка по теме
+
+1. Что такое кредит?
+* Предоставление денег в долг под процент
+- Подарок от банка
+- Способ пассивного заработка
+
+2. Что важно проверить перед оформлением кредита?
+* Свою платёжеспособность
+- Курс доллара
+- Прогноз погоды`;
+
+  function renderTestImport(box, el) {
+    box.innerHTML = `
+      <div class="acard">
+        <h4>Импорт теста из текста</h4>
+        <p class="ahint">Вставьте текст теста — он создастся автоматически. Правильный вариант помечайте <b>*</b>, остальные — <b>-</b>. Вопросы нумеруйте «1.», «2.»…</p>
+        <textarea class="aarea" id="timp" rows="12" spellcheck="false" placeholder="Тест: Название&#10;Описание: (необязательно)&#10;&#10;1. Текст вопроса?&#10;* Правильный вариант&#10;- Неправильный вариант&#10;- Неправильный вариант"></textarea>
+        <details style="margin:6px 0 10px">
+          <summary class="ahint" style="cursor:pointer">Показать пример формата</summary>
+          <pre class="aexample">${esc(TEST_EXAMPLE)}</pre>
+          <button class="abtn sec" id="timpfill" style="margin-top:8px">Подставить пример</button>
+        </details>
+        <div class="arow">
+          <button class="abtn ok" id="timpgo">Импортировать</button>
+          <button class="abtn sec" id="timpcancel">Отмена</button>
+        </div>
+      </div>`;
+    $("#timpfill", box).onclick = () => ($("#timp", box).value = TEST_EXAMPLE);
+    $("#timpcancel", box).onclick = () => (box.innerHTML = "");
+    $("#timpgo", box).onclick = async () => {
+      const text = $("#timp", box).value.trim();
+      if (!text) { toast("Вставьте текст теста"); return; }
+      try {
+        const r = await api("/admin/tests/import", { method: "POST", body: { text } });
+        toast(`Тест «${r.title}» создан: ${r.questions} ${plural(r.questions, "вопрос", "вопроса", "вопросов")} ✅`);
+        aTests(el);
+      } catch (e) { toast(e.message); }
+    };
   }
 
   function renderTestForm(box, el) {
