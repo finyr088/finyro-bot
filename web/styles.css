@@ -350,6 +350,7 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .abtn.no { background: #3a1f1f; color: #ff9a9a; }
 .abtn.sec { background: #2a2a2a; color: #fff; }
 .abtn.del { background: #2a1414; color: #ff8080; }
+.abtn.mv { background: #242438; color: var(--lime-400); font-size: 16px; padding: 10px 13px; line-height: 1; }
 .abtn:disabled { opacity: .55; }
 .ainput, .aarea, .asel {
   width: 100%; background: #141414; border: 1px solid #333; border-radius: 11px;

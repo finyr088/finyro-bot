@@ -861,6 +861,8 @@
             <div class="acard">
               <h4>📁 ${esc(s.title)}</h4><p>${s.topics} тем</p>
               <div class="arow">
+                <button class="abtn mv" data-mv="sections/${s.id}/move/up" title="Вверх">↑</button>
+                <button class="abtn mv" data-mv="sections/${s.id}/move/down" title="Вниз">↓</button>
                 <button class="abtn ok" data-opensec="${s.id}" data-title="${esc(s.title)}">Открыть</button>
                 <button class="abtn del" data-delsec="${s.id}">Удалить</button>
               </div>
@@ -882,6 +884,8 @@
             <div class="acard">
               <h4>📂 ${esc(t.title)}</h4><p>${t.videos} видео</p>
               <div class="arow">
+                <button class="abtn mv" data-mv="topics/${t.id}/move/up" title="Вверх">↑</button>
+                <button class="abtn mv" data-mv="topics/${t.id}/move/down" title="Вниз">↓</button>
                 <button class="abtn ok" data-opentop="${t.id}" data-title="${esc(t.title)}">Открыть</button>
                 <button class="abtn del" data-deltop="${t.id}">Удалить</button>
               </div>
@@ -904,6 +908,8 @@
             <div class="acard">
               <h4>🎬 ${esc(v.title)}</h4><p>${v.status === "published" ? "🟢 опубликовано" : "⚪️ черновик"} · 📎 ${v.attachments}</p>
               <div class="arow">
+                <button class="abtn mv" data-mv="videos/${v.id}/move/up" title="Вверх">↑</button>
+                <button class="abtn mv" data-mv="videos/${v.id}/move/down" title="Вниз">↓</button>
                 ${v.status === "published" ? `<button class="abtn sec" data-unpub="${v.id}">Снять</button>` : `<button class="abtn ok" data-pub="${v.id}">Опубликовать</button>`}
                 <button class="abtn sec" data-att="${v.id}" data-title="${esc(v.title)}">📎 Материалы</button>
                 <button class="abtn del" data-delvid="${v.id}">Удалить</button>
@@ -927,12 +933,17 @@
             <div class="acard">
               <h4>${a.kind === "presentation" ? "📊" : a.kind === "link" ? "🔗" : "📎"} ${esc(a.title)}</h4>
               <p style="word-break:break-all">${esc(a.url)}</p>
-              <div class="arow"><button class="abtn del" data-delatt="${a.id}">Удалить</button></div>
+              <div class="arow">
+                <button class="abtn mv" data-mv="attachments/${a.id}/move/up" title="Вверх">↑</button>
+                <button class="abtn mv" data-mv="attachments/${a.id}/move/down" title="Вниз">↓</button>
+                <button class="abtn del" data-delatt="${a.id}">Удалить</button>
+              </div>
             </div>`).join("") || '<div class="acard"><p>Вложений пока нет.</p></div>'}</div>`;
         $("#wback", el).onclick = () => { adminWebNav = { level: "videos", sectionId: nav.sectionId, sectionTitle: nav.sectionTitle, topicId: nav.topicId, topicTitle: nav.topicTitle }; renderAdminWeb(el); };
         $("#addatt", el).onclick = () => renderAttForm($("#attform", el), el, nav.materialId);
         el.querySelectorAll("[data-delatt]").forEach((b) => (b.onclick = () => delThen("Удалить вложение?", "/admin/attachments/" + b.dataset.delatt, el)));
       }
+      el.querySelectorAll("[data-mv]").forEach((b) => (b.onclick = () => moveThen("/admin/" + b.dataset.mv, el)));
     } catch (e) { aErr(el, e); }
   }
 
@@ -955,6 +966,9 @@
   }
   async function postThen(path, el) {
     try { await api(path, { method: "POST" }); toast("Готово"); renderAdminWeb(el); } catch (e) { toast(e.message); }
+  }
+  async function moveThen(path, el) {
+    try { await api(path, { method: "POST" }); renderAdminWeb(el); } catch (e) { toast(e.message); }
   }
 
   function renderAdminVideoForm(box, el, topicId) {

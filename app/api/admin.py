@@ -471,6 +471,63 @@ async def delete_attachment(attachment_id: int, session: AsyncSession = Depends(
     return {"ok": True}
 
 
+# --- Перемещение (ранжирование ↑/↓) ---
+
+def _reorder(siblings: list, item_id: int, direction: str) -> None:
+    """Меняет местами элемент с соседом и пересчитывает order_index по позициям."""
+    ids = [s.id for s in siblings]
+    if item_id not in ids:
+        return
+    i = ids.index(item_id)
+    j = i - 1 if direction == "up" else i + 1
+    if j < 0 or j >= len(siblings):
+        return  # уже с краю
+    siblings[i], siblings[j] = siblings[j], siblings[i]
+    for k, s in enumerate(siblings):
+        s.order_index = k
+
+
+@router.post("/sections/{section_id}/move/{direction}")
+async def move_section(section_id: int, direction: str, session: AsyncSession = Depends(get_session)):
+    _reorder(await services.admin_sections(session), section_id, direction)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/topics/{topic_id}/move/{direction}")
+async def move_topic(topic_id: int, direction: str, session: AsyncSession = Depends(get_session)):
+    t = await session.get(Topic, topic_id)
+    if t is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Тема не найдена")
+    _reorder(await services.admin_topics(session, t.section_id), topic_id, direction)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/videos/{video_id}/move/{direction}")
+async def move_video(video_id: int, direction: str, session: AsyncSession = Depends(get_session)):
+    v = await session.get(Material, video_id)
+    if v is None or v.topic_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Видео не найдено")
+    _reorder(await services.admin_topic_videos(session, v.topic_id), video_id, direction)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/attachments/{attachment_id}/move/{direction}")
+async def move_attachment(attachment_id: int, direction: str, session: AsyncSession = Depends(get_session)):
+    a = await session.get(Attachment, attachment_id)
+    if a is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вложение не найдено")
+    sibs = list(await session.scalars(
+        select(Attachment).where(Attachment.material_id == a.material_id)
+        .order_by(Attachment.order_index.asc(), Attachment.id.asc())
+    ))
+    _reorder(sibs, attachment_id, direction)
+    await session.commit()
+    return {"ok": True}
+
+
 # ─────────────────────────── Расписание ──────────────────────
 
 @router.get("/events")
