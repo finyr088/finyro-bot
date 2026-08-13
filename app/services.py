@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 _EPOCH = datetime(1970, 1, 1)
 
@@ -279,6 +279,62 @@ async def mark_watched(session: AsyncSession, user_id: int, material_id: int) ->
         session.add(progress)
     progress.watched = True
     progress.watched_at = utcnow()
+
+
+async def save_position(session: AsyncSession, user_id: int, material_id: int, position: int) -> None:
+    """Сохраняет секунду, на которой ученик остановил видео."""
+    progress = await get_progress(session, user_id, material_id)
+    if progress is None:
+        progress = MaterialProgress(user_id=user_id, material_id=material_id)
+        session.add(progress)
+    progress.position = max(0, int(position))
+    progress.opened_at = utcnow()
+
+
+# --- Геймификация: стрик, прогресс курса, достижения ---
+
+async def touch_activity(session: AsyncSession, user: User) -> int:
+    """Обновляет серию активных дней (стрик). Вызывать раз при заходе."""
+    today = utcnow().date()
+    last = user.last_active_date
+    if last == today:
+        return user.streak or 0
+    if last == today - timedelta(days=1):
+        user.streak = (user.streak or 0) + 1
+    else:
+        user.streak = 1
+    user.last_active_date = today
+    return user.streak
+
+
+async def course_progress(session: AsyncSession, user: User) -> int:
+    videos = await visible_materials(session, MaterialKind.VIDEO)
+    total = len(videos)
+    if not total:
+        return 0
+    watched = await watched_material_ids(session, user.id)
+    done = len({m.id for m in videos} & watched)
+    return round(done / total * 100)
+
+
+async def badges(session: AsyncSession, user: User) -> list[dict]:
+    summary = await progress_summary(session, user)
+    wv, tp, streak = summary["videos_watched"], summary["tests_passed"], user.streak or 0
+    attempts = list(await session.scalars(select(TestAttempt).where(TestAttempt.user_id == user.id)))
+    any_100 = any(a.total > 0 and a.score == a.total for a in attempts)
+    board = await leaderboard(session)
+    rank = next((r["rank"] for r in board if r["user_id"] == user.id), None)
+
+    defs = [
+        ("first_video", "🎬", "Первый вебинар", "Посмотрите 1 вебинар", wv >= 1),
+        ("marathon", "🍿", "Марафонец", "Посмотрите 5 вебинаров", wv >= 5),
+        ("first_test", "📝", "Первый тест", "Пройдите 1 тест", tp >= 1),
+        ("excellent", "⭐", "Отличник", "Сдайте тест на 100%", any_100),
+        ("streak3", "🔥", "В ударе", "Заходите 3 дня подряд", streak >= 3),
+        ("streak7", "💎", "Неделя подряд", "Заходите 7 дней подряд", streak >= 7),
+        ("top3", "🏆", "Призёр", "Попадите в топ-3 рейтинга", rank is not None and rank <= 3),
+    ]
+    return [{"id": i, "icon": ic, "title": t, "desc": d, "earned": bool(e)} for (i, ic, t, d, e) in defs]
 
 
 async def touch_opened(session: AsyncSession, user_id: int, material_id: int) -> None:

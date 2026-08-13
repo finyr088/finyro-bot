@@ -243,6 +243,7 @@
       const cont = me.continue;
       const newItems = videos.videos.filter((v) => !v.watched).slice(0, 3);
       let html = `<h1 class="title">Привет, ${esc(firstName(me.user.name))}! 👋</h1>`;
+      html += progStrip(me.progress.course_percent || 0, me.streak || 0);
 
       if (cont) {
         const label = cont.watched ? "Пересмотреть" : "Досмотреть";
@@ -440,6 +441,10 @@
           <div class="stat"><div class="num">${p.tests_passed}</div><div class="lbl">Тестов пройдено</div></div>
           <div class="stat"><div class="num">${p.avg_percent}%</div><div class="lbl">Средний балл</div></div>
         </div>
+        <h2 class="section">Прогресс курса</h2>
+        <div class="card">${progStrip(p.course_percent || 0, me.streak || 0)}</div>
+        <h2 class="section">Достижения</h2>
+        <div class="badges">${(me.badges || []).map(badgeItem).join("")}</div>
         <h2 class="section">Оформление</h2>
         <div class="seg" id="themeSeg">
           <button data-th="light" class="${th === "light" ? "on" : ""}">☀️ Светлая</button>
@@ -548,6 +553,11 @@
           <video id="vid" controls playsinline preload="metadata"
             controlslist="nodownload noremoteplayback" disablepictureinpicture></video>
         </div>
+        <div class="vctrl">
+          <button class="vbtn" id="back10">⏪ 10 сек</button>
+          <button class="vbtn" id="spd">Скорость 1×</button>
+          <button class="vbtn" id="fwd10">10 сек ⏩</button>
+        </div>
         ${v.description ? `<p class="muted" style="margin:12px 2px">${esc(v.description)}</p>` : ""}
         <button class="btn" id="watchBtn">${v.watched ? "✓ Просмотрено" : "Отметить просмотренным"}</button>
         ${v.attachments && v.attachments.length ? `
@@ -556,16 +566,56 @@
             <span class="attach-ic">${a.kind === "presentation" ? "📊" : a.kind === "link" ? "🔗" : "📎"}</span>
             <span class="grow">${esc(a.title)}</span><span class="chev">↗</span></a>`).join("")}` : ""}`;
       $("#back", el).onclick = gotoVideosTab;
-      setupPlayer($("#vid", el), $("#wm", el), $("#pw", el), v.stream_url);
+      const vid = $("#vid", el);
+      setupPlayer(vid, $("#wm", el), $("#pw", el), v.stream_url);
+
+      // Продолжить с сохранённой позиции
+      vid.addEventListener("loadedmetadata", () => {
+        const dur = vid.duration || 0;
+        if (v.position > 5 && (!dur || v.position < dur - 5)) {
+          vid.currentTime = v.position;
+          toast(`Продолжаем с ${fmtTime(v.position)}`);
+        }
+      }, { once: true });
+
+      // Сохранение позиции (раз в ~5с и на паузе)
+      let lastSave = 0;
+      const savePos = () => {
+        const p = Math.floor(vid.currentTime || 0);
+        api("/videos/" + id + "/progress", { method: "POST", body: { position: p } }).catch(() => {});
+      };
+      vid.addEventListener("timeupdate", () => {
+        const now = Date.now();
+        if (now - lastSave > 5000) { lastSave = now; savePos(); }
+      });
+      vid.addEventListener("pause", savePos);
+
+      // Перемотка ±10 сек
+      $("#back10", el).onclick = () => { vid.currentTime = Math.max(0, vid.currentTime - 10); };
+      $("#fwd10", el).onclick = () => { vid.currentTime = Math.min(vid.duration || 1e9, vid.currentTime + 10); };
+      // Скорость
+      const speeds = [1, 1.25, 1.5, 2, 0.75];
+      let si = 0;
+      $("#spd", el).onclick = () => {
+        si = (si + 1) % speeds.length;
+        vid.playbackRate = speeds[si];
+        $("#spd", el).textContent = "Скорость " + speeds[si] + "×";
+      };
+
       const wb = $("#watchBtn", el);
       const mark = async () => {
         try { await api("/videos/" + id + "/watch", { method: "POST" }); wb.textContent = "✓ Просмотрено"; toast("Отмечено как просмотренное"); }
         catch (e) { toast(e.message); }
       };
       wb.onclick = mark;
-      $("#vid", el).addEventListener("ended", mark, { once: true });
+      vid.addEventListener("ended", mark, { once: true });
     } catch (e) { errCard(el, e); }
   }
+
+  const fmtTime = (s) => {
+    s = Math.floor(s || 0);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
 
   function setupPlayer(video, wm, wrap, url) {
     video.oncontextmenu = () => false;
@@ -695,6 +745,23 @@
   // --- Вспомогательное ---
   const firstName = (name) => (name || "").split(" ")[0] || "друг";
   const emptyCard = (msg) => `<div class="card"><p>${esc(msg)}</p></div>`;
+  function plural(n, one, few, many) {
+    const a = Math.abs(n) % 100, b = a % 10;
+    if (a > 10 && a < 20) return many;
+    if (b > 1 && b < 5) return few;
+    if (b === 1) return one;
+    return many;
+  }
+  const progStrip = (percent, streak) => `
+    <div class="prog-strip">
+      <div class="prog-top"><span>Прогресс курса</span><b>${percent}%</b></div>
+      <div class="prog-bar"><span style="width:${percent}%"></span></div>
+      ${streak > 0 ? `<div class="streak">🔥 ${streak} ${plural(streak, "день", "дня", "дней")} подряд</div>` : ""}
+    </div>`;
+  const badgeItem = (b) => `
+    <div class="badge-item${b.earned ? " on" : ""}" title="${esc(b.desc)}">
+      <div class="badge-ic">${b.icon}</div><div class="badge-t">${esc(b.title)}</div>
+    </div>`;
   function errCard(el, e) {
     if (e.status === 403) { renderLocked(); return; }
     el.innerHTML = `<div class="card"><h3>Ошибка</h3><p>${esc(e.message || "Не удалось загрузить")}</p></div>`;

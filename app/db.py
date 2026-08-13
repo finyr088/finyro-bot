@@ -30,6 +30,9 @@ def _migrate(sync_conn) -> None:
     tables = set(insp.get_table_names())
     additions = [
         ("materials", "topic_id", "INTEGER"),
+        ("material_progress", "position", "INTEGER"),
+        ("users", "streak", "INTEGER"),
+        ("users", "last_active_date", "DATE"),
     ]
     for table, col, coltype in additions:
         if table not in tables:

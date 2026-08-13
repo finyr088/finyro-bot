@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from datetime import date
+
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -55,6 +58,10 @@ class User(Base):
     access_active: Mapped[bool] = mapped_column(Boolean, default=False)
     access_granted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     access_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Геймификация: серия активных дней подряд
+    streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_active_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -201,6 +208,7 @@ class MaterialProgress(Base):
     watched: Mapped[bool] = mapped_column(Boolean, default=False)
     watched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     opened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)  # секунда, на которой остановились
 
 
 class SupportMessage(Base):

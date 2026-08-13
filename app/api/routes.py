@@ -170,10 +170,17 @@ async def verify_code(body: VerifyCodeIn, session: AsyncSession = Depends(get_se
 @router.get("/me")
 async def me(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     summary = await services.progress_summary(session, user)
-    cont = await services.continue_video(session, user) if effective_access(user) else None
+    has = effective_access(user)
+    streak = await services.touch_activity(session, user)
+    summary["course_percent"] = await services.course_progress(session, user) if has else 0
+    cont = await services.continue_video(session, user) if has else None
+    badges = await services.badges(session, user) if has else []
+    await session.commit()  # сохраняем обновлённый стрик
     return {
         "user": _user_public(user),
         "progress": summary,
+        "streak": streak,
+        "badges": badges,
         "continue": cont,
         "course": {"title": settings.COURSE_TITLE, "price": settings.COURSE_PRICE},
     }
@@ -255,10 +262,30 @@ async def get_video(
         "description": mat.description,   # комментарий к видео
         "stream_url": stream_url,
         "watched": bool(watched and watched.watched),
+        "position": watched.position if watched else 0,
         "attachments": await services.video_attachments(session, mat.id),
         # Данные для динамического водяного знака поверх видео
         "watermark": f"{user.full_name} · id{user.telegram_id}",
     }
+
+
+class PositionIn(BaseModel):
+    position: int = 0
+
+
+@router.post("/videos/{material_id}/progress")
+async def save_video_position(
+    material_id: int,
+    body: PositionIn,
+    user: User = Depends(require_access),
+    session: AsyncSession = Depends(get_session),
+):
+    mat = await session.get(Material, material_id)
+    if mat is None or mat.kind != MaterialKind.VIDEO:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вебинар не найден")
+    await services.save_position(session, user.id, material_id, body.position)
+    await session.commit()
+    return {"ok": True}
 
 
 @router.post("/videos/{material_id}/watch")
