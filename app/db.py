@@ -33,6 +33,10 @@ def _migrate(sync_conn) -> None:
         ("material_progress", "position", "INTEGER"),
         ("users", "streak", "INTEGER"),
         ("users", "last_active_date", "DATE"),
+        ("users", "referred_by_id", "INTEGER"),
+        ("users", "referral_rewarded", "INTEGER"),
+        ("users", "referral_earned", "INTEGER"),
+        ("users", "referral_paid_out", "INTEGER"),
     ]
     for table, col, coltype in additions:
         if table not in tables:

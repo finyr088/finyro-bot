@@ -80,7 +80,16 @@ class Settings:
         "Пошаговая подготовка к олимпиадам и конкурсам: вебинары, теория и тесты. "
         "Материалы открываются постепенно, чтобы вы шли по программе без перегруза.",
     )
-    COURSE_PRICE: str = _get("COURSE_PRICE", "4 990 ₽")
+    COURSE_PRICE: str = _get("COURSE_PRICE", "2 990 ₽")
+    # Числовая цена курса — база для расчёта реферальной комиссии.
+    COURSE_PRICE_RUB: int = _get_int("COURSE_PRICE_RUB", 2990)
+
+    # --- Реферальная программа ---
+    # Комиссия пригласившему: % за первого оплатившего реферала и за остальных.
+    REFERRAL_PERCENT_FIRST: int = _get_int("REFERRAL_PERCENT_FIRST", 10)
+    REFERRAL_PERCENT_REST: int = _get_int("REFERRAL_PERCENT_REST", 15)
+    # Юзернейм бота для персональных ссылок. Пусто = определим через get_me().
+    BOT_USERNAME: str = _get("BOT_USERNAME", "").lstrip("@")
     PAY_REQUISITES: str = _get(
         "PAY_REQUISITES",
         "Перевод на карту: 0000 0000 0000 0000 (Банк, Имя Ф.)\n"

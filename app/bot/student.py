@@ -10,11 +10,62 @@ from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from ..config import settings
 from ..db import session_scope
 from .. import services
+from .instance import get_bot
 from . import keyboards as kb
 from . import texts
 from .notify import notify_admins, notify_admins_photo
 
 router = Router(name="student")
+
+_bot_username_cache: str | None = None
+
+
+def _parse_ref_payload(text: str | None) -> int | None:
+    """Из «/start ref_12345» достаёт telegram_id пригласившего."""
+    parts = (text or "").split(maxsplit=1)
+    if len(parts) < 2:
+        return None
+    payload = parts[1].strip()
+    if payload.startswith("ref_"):
+        rest = payload[4:]
+        if rest.isdigit():
+            return int(rest)
+    return None
+
+
+async def _bot_username() -> str:
+    global _bot_username_cache
+    if settings.BOT_USERNAME:
+        return settings.BOT_USERNAME
+    if _bot_username_cache:
+        return _bot_username_cache
+    bot = get_bot()
+    try:
+        me = await bot.get_me()
+        _bot_username_cache = me.username or "finyrobot"
+    except Exception:
+        _bot_username_cache = "finyrobot"
+    return _bot_username_cache
+
+
+async def _referral_link(telegram_id: int) -> str:
+    return f"https://t.me/{await _bot_username()}?start=ref_{telegram_id}"
+
+
+async def _show_referral(target, telegram_id: int, edit: bool) -> None:
+    """Показывает экран реферальной программы (target — Message или CallbackQuery)."""
+    async with session_scope() as session:
+        user = await services.get_or_create_user(session, telegram_id)
+        stats = await services.referral_stats(session, user)
+        await session.commit()
+    link = await _referral_link(telegram_id)
+    text = texts.referral_text(link, stats)
+    share_text = "Курс по финансовой грамотности «Финуро» — вебинары, теория и тесты 👇"
+    markup = kb.referral_inline(link, share_text, stats["available"])
+    if edit:
+        await _edit(target, text, markup)
+    else:
+        await target.answer(text, reply_markup=markup)
 
 
 class PayFlow(StatesGroup):
@@ -59,7 +110,19 @@ async def _send_menu(message: Message) -> None:
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-    name, has = await _touch_user(message.from_user)
+    tg = message.from_user
+    ref_tg = _parse_ref_payload(message.text)
+    async with session_scope() as session:
+        existing = await services.get_user_by_tg(session, tg.id)
+        is_new = existing is None
+        user = await services.get_or_create_user(
+            session, tg.id, tg.username, tg.first_name, tg.last_name
+        )
+        # Закрепляем за пригласившим только новых пользователей, пришедших по ссылке.
+        if is_new and ref_tg is not None:
+            await services.attach_referral(session, user, ref_tg)
+        await session.commit()
+        name, has = user.full_name, user.has_access()
     # Первое сообщение убирает старую reply-клавиатуру (если осталась от прошлых версий).
     await message.answer("🎓 Добро пожаловать в <b>Финуро</b>!", reply_markup=ReplyKeyboardRemove())
     await message.answer(texts.main_menu_text(name, has), reply_markup=kb.main_menu_inline(has))
@@ -69,6 +132,44 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 async def cmd_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await _send_menu(message)
+
+
+@router.message(Command("ref"))
+async def cmd_ref(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await _show_referral(message, message.from_user.id, edit=False)
+
+
+@router.callback_query(F.data == "menu:ref")
+async def cb_ref(call: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await _show_referral(call, call.from_user.id, edit=True)
+
+
+@router.callback_query(F.data == "ref:payout")
+async def cb_ref_payout(call: CallbackQuery) -> None:
+    async with session_scope() as session:
+        user = await services.get_or_create_user(session, call.from_user.id)
+        stats = await services.referral_stats(session, user)
+        await session.commit()
+        full_name, tg = user.full_name, user.telegram_id
+    available = stats["available"]
+    if available <= 0:
+        await call.answer("Пока нечего выплачивать", show_alert=True)
+        return
+    await notify_admins(
+        "💸 <b>Запрос на выплату по реферальной программе</b>\n"
+        f"От: {full_name} (<code>{tg}</code>)\n"
+        f"К выплате: <b>{available} ₽</b>\n"
+        f"Приглашено оплативших: {stats['paid']} · заработано всего: {stats['earned']} ₽",
+        reply_markup=kb.referral_payout_admin(tg),
+    )
+    await _edit(
+        call,
+        f"✅ Запрос на выплату <b>{available} ₽</b> отправлен администратору.\n"
+        "Мы свяжемся с вами для перечисления средств.",
+        kb.back_inline(),
+    )
 
 
 # ─────────────────────────── Навигация (callbacks) ────────────

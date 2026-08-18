@@ -49,6 +49,7 @@ async def _run_bot() -> None:
                 [
                     BotCommand(command="start", description="Начать / главное меню"),
                     BotCommand(command="status", description="Мой статус доступа"),
+                    BotCommand(command="ref", description="Реферальная программа"),
                     BotCommand(command="admin", description="Админ-панель (для владельца)"),
                 ]
             )

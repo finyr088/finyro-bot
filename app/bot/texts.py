@@ -100,6 +100,43 @@ NEED_ACCESS = (
 )
 
 
+def referral_text(link: str, stats: dict) -> str:
+    first = settings.REFERRAL_PERCENT_FIRST
+    rest = settings.REFERRAL_PERCENT_REST
+    return (
+        "🎁 <b>Реферальная программа Финуро</b>\n\n"
+        "Приглашайте друзей по своей персональной ссылке и получайте вознаграждение "
+        "за каждого, кто оплатит курс:\n"
+        f"• за 1-го оплатившего — <b>{first}%</b>\n"
+        f"• за каждого следующего — <b>{rest}%</b>\n\n"
+        "🔗 <b>Ваша ссылка</b> (нажмите, чтобы скопировать):\n"
+        f"<code>{escape(link)}</code>\n\n"
+        "📊 <b>Ваша статистика</b>\n"
+        f"• Перешли по ссылке: <b>{stats['came']}</b>\n"
+        f"• Оплатили курс: <b>{stats['paid']}</b>\n"
+        f"• Заработано всего: <b>{stats['earned']} ₽</b>\n"
+        f"• Выплачено: <b>{stats['paid_out']} ₽</b>\n"
+        f"• Доступно к выплате: <b>{stats['available']} ₽</b>"
+    )
+
+
+def referral_earned_notice(reward: int, percent: int, earned_total: int) -> str:
+    return (
+        "🎉 <b>Реферальное вознаграждение!</b>\n\n"
+        f"Приглашённый вами человек оплатил курс. Вам начислено "
+        f"<b>{reward} ₽</b> ({percent}%).\n"
+        f"Всего заработано: <b>{earned_total} ₽</b>.\n\n"
+        "Открыть программу и запросить выплату — команда /ref."
+    )
+
+
+def referral_payout_done(amount: int) -> str:
+    return (
+        f"✅ Выплата <b>{amount} ₽</b> отправлена!\n"
+        "Спасибо, что рекомендуете Финуро 💜"
+    )
+
+
 def status_text(user, payment) -> str:
     if user.has_access():
         line = "🟢 Доступ активен"

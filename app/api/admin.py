@@ -43,6 +43,16 @@ log = logging.getLogger("finyro.admin")
 router = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)])
 
 
+async def _notify_referrer(reward: dict | None) -> None:
+    """Сообщает пригласившему о начисленной комиссии (если она была)."""
+    if not reward:
+        return
+    await send_to_user(
+        reward["referrer_tg"],
+        bot_texts.referral_earned_notice(reward["reward"], reward["percent"], reward["earned_total"]),
+    )
+
+
 # ─────────────────────────── Схемы ───────────────────────────
 
 class MaterialIn(BaseModel):
@@ -153,10 +163,11 @@ async def review_payment(payment_id: int, action: str, admin: User = Depends(req
     if p.status != PaymentStatus.PENDING:
         raise HTTPException(status.HTTP_409_CONFLICT, "Заявка уже обработана")
     if action == "approve":
-        user = await services.approve_payment(session, p, admin.telegram_id)
+        user, reward = await services.approve_payment(session, p, admin.telegram_id)
         await session.commit()
         await send_to_user(user.telegram_id, bot_texts.ACCESS_GRANTED, reply_markup=bot_kb.open_app_inline())
         await send_to_user(user.telegram_id, bot_texts.main_menu_text(user.full_name, True), reply_markup=bot_kb.main_menu_inline(True))
+        await _notify_referrer(reward)
     else:
         user = await services.reject_payment(session, p, admin.telegram_id)
         await session.commit()
@@ -190,10 +201,11 @@ async def manage_student(telegram_id: int, action: str, admin: User = Depends(re
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
     if action == "grant":
-        await services.grant_access(session, user, admin.telegram_id)
+        reward = await services.grant_access(session, user, admin.telegram_id)
         await session.commit()
         await send_to_user(user.telegram_id, bot_texts.ACCESS_GRANTED, reply_markup=bot_kb.open_app_inline())
         await send_to_user(user.telegram_id, bot_texts.main_menu_text(user.full_name, True), reply_markup=bot_kb.main_menu_inline(True))
+        await _notify_referrer(reward)
     else:
         await services.revoke_access(session, user, admin.telegram_id)
         await session.commit()

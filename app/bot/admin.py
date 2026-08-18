@@ -28,6 +28,16 @@ from .notify import send_to_user
 router = Router(name="admin")
 
 
+async def _notify_referrer(reward: dict | None) -> None:
+    """Сообщает пригласившему о начисленной комиссии (если она была)."""
+    if not reward:
+        return
+    await send_to_user(
+        reward["referrer_tg"],
+        texts.referral_earned_notice(reward["reward"], reward["percent"], reward["earned_total"]),
+    )
+
+
 class AdminFilter(BaseFilter):
     async def __call__(self, event: Message | CallbackQuery) -> bool:
         return bool(event.from_user and settings.is_admin(event.from_user.id))
@@ -117,10 +127,11 @@ async def review_payment(call: CallbackQuery) -> None:
             await call.answer("Заявка уже обработана", show_alert=True)
             return
         if action == "approve":
-            user = await services.approve_payment(session, payment, call.from_user.id)
+            user, reward = await services.approve_payment(session, payment, call.from_user.id)
             await session.commit()
             await send_to_user(user.telegram_id, texts.ACCESS_GRANTED, reply_markup=kb.open_app_inline())
             await send_to_user(user.telegram_id, texts.main_menu_text(user.full_name, True), reply_markup=kb.main_menu_inline(True))
+            await _notify_referrer(reward)
             result = f"✅ Оплата подтверждена, доступ выдан ({user.full_name})"
         else:
             user = await services.reject_payment(session, payment, call.from_user.id)
@@ -155,6 +166,29 @@ async def list_users(message: Message) -> None:
         )
 
 
+@router.callback_query(F.data.startswith("refpaid:"))
+async def mark_referral_paid(call: CallbackQuery) -> None:
+    tg = int(call.data.split(":")[1])
+    async with session_scope() as session:
+        user = await services.get_user_by_tg(session, tg)
+        if user is None:
+            await call.answer("Пользователь не найден", show_alert=True)
+            return
+        amount = await services.mark_referral_paid(session, user)
+        await session.commit()
+        full_name = user.full_name
+    if amount <= 0:
+        await call.answer("Нет доступной суммы к выплате", show_alert=True)
+        return
+    await send_to_user(tg, texts.referral_payout_done(amount))
+    await call.answer("Отмечено выплаченным")
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await call.message.answer(f"💸 Отмечено: выплачено {amount} ₽ ({full_name})")
+
+
 @router.callback_query(F.data.startswith("user:"))
 async def manage_user(call: CallbackQuery) -> None:
     _, action, tg = call.data.split(":")
@@ -164,10 +198,11 @@ async def manage_user(call: CallbackQuery) -> None:
             await call.answer("Пользователь не найден", show_alert=True)
             return
         if action == "grant":
-            await services.grant_access(session, user, call.from_user.id)
+            reward = await services.grant_access(session, user, call.from_user.id)
             await session.commit()
             await send_to_user(user.telegram_id, texts.ACCESS_GRANTED, reply_markup=kb.open_app_inline())
             await send_to_user(user.telegram_id, texts.main_menu_text(user.full_name, True), reply_markup=kb.main_menu_inline(True))
+            await _notify_referrer(reward)
             note = "🔓 Доступ выдан"
         else:
             await services.revoke_access(session, user, call.from_user.id)

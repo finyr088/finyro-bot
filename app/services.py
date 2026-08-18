@@ -75,7 +75,10 @@ async def get_user_by_tg(session: AsyncSession, telegram_id: int) -> User | None
 
 # --- Доступ ---
 
-async def grant_access(session: AsyncSession, user: User, admin_id: int) -> None:
+async def grant_access(session: AsyncSession, user: User, admin_id: int) -> dict | None:
+    """Выдаёт доступ. Если ученик пришёл по реферальной ссылке и комиссия за него
+    ещё не начислялась — начисляет её пригласившему и возвращает данные для
+    уведомления {referrer_tg, reward, percent, earned_total}. Иначе None."""
     user.access_active = True
     user.access_granted_at = utcnow()
     if settings.ACCESS_DAYS > 0:
@@ -85,6 +88,84 @@ async def grant_access(session: AsyncSession, user: User, admin_id: int) -> None
     session.add(
         AdminLog(admin_id=admin_id, action="grant_access", target_user_id=user.telegram_id)
     )
+    return await _accrue_referral_reward(session, user)
+
+
+# --- Реферальная программа ---
+
+def _reward_amount(paid_count: int) -> tuple[int, int]:
+    """Возвращает (сумма ₽, процент) за очередного оплатившего реферала."""
+    percent = (
+        settings.REFERRAL_PERCENT_FIRST if paid_count == 0
+        else settings.REFERRAL_PERCENT_REST
+    )
+    return settings.COURSE_PRICE_RUB * percent // 100, percent
+
+
+async def attach_referral(session: AsyncSession, user: User, referrer_tg: int) -> bool:
+    """Закрепляет нового ученика за пригласившим (по telegram_id). Один раз,
+    только пока у ученика нет доступа и он не привязан ранее, и не сам к себе."""
+    if user.referred_by_id is not None or user.access_active:
+        return False
+    if referrer_tg == user.telegram_id:
+        return False
+    referrer = await get_user_by_tg(session, referrer_tg)
+    if referrer is None:
+        return False
+    user.referred_by_id = referrer.id
+    await session.flush()
+    return True
+
+
+async def _accrue_referral_reward(session: AsyncSession, user: User) -> dict | None:
+    if bool(user.referral_rewarded) or user.referred_by_id is None:
+        return None
+    referrer = await session.get(User, user.referred_by_id)
+    if referrer is None:
+        return None
+    paid_count = await session.scalar(
+        select(func.count(User.id)).where(
+            User.referred_by_id == referrer.id, User.referral_rewarded.is_(True)
+        )
+    ) or 0
+    reward, percent = _reward_amount(paid_count)
+    referrer.referral_earned = (referrer.referral_earned or 0) + reward
+    user.referral_rewarded = True
+    await session.flush()
+    return {
+        "referrer_tg": referrer.telegram_id,
+        "reward": reward,
+        "percent": percent,
+        "earned_total": referrer.referral_earned,
+    }
+
+
+async def referral_stats(session: AsyncSession, user: User) -> dict:
+    """Статистика пригласившего: сколько пришло, сколько оплатило, заработок."""
+    came = await session.scalar(
+        select(func.count(User.id)).where(User.referred_by_id == user.id)
+    ) or 0
+    paid = await session.scalar(
+        select(func.count(User.id)).where(
+            User.referred_by_id == user.id, User.referral_rewarded.is_(True)
+        )
+    ) or 0
+    earned = user.referral_earned or 0
+    paid_out = user.referral_paid_out or 0
+    return {
+        "came": came,
+        "paid": paid,
+        "earned": earned,
+        "paid_out": paid_out,
+        "available": max(0, earned - paid_out),
+    }
+
+
+async def mark_referral_paid(session: AsyncSession, user: User) -> int:
+    """Отмечает всю доступную сумму как выплаченную. Возвращает выплаченное ₽."""
+    available = max(0, (user.referral_earned or 0) - (user.referral_paid_out or 0))
+    user.referral_paid_out = user.referral_earned or 0
+    return available
 
 
 async def revoke_access(session: AsyncSession, user: User, admin_id: int) -> None:
@@ -122,13 +203,15 @@ async def pending_payments(session: AsyncSession, limit: int = 20) -> list[Payme
     return list(result)
 
 
-async def approve_payment(session: AsyncSession, payment: Payment, admin_id: int) -> User:
+async def approve_payment(
+    session: AsyncSession, payment: Payment, admin_id: int
+) -> tuple[User, dict | None]:
     payment.status = PaymentStatus.APPROVED
     payment.reviewed_at = utcnow()
     payment.reviewed_by = admin_id
     user = await session.get(User, payment.user_id)
-    await grant_access(session, user, admin_id)
-    return user
+    reward = await grant_access(session, user, admin_id)
+    return user, reward
 
 
 async def reject_payment(session: AsyncSession, payment: Payment, admin_id: int) -> User:

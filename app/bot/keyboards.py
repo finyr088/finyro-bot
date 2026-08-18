@@ -68,6 +68,7 @@ def main_menu_inline(has_access: bool) -> InlineKeyboardMarkup:
     ])
     if not has_access:
         rows.append([InlineKeyboardButton(text="💳 Оплатить доступ", callback_data="menu:pay")])
+    rows.append([InlineKeyboardButton(text="🎁 Реферальная программа", callback_data="menu:ref")])
     rows.append([
         InlineKeyboardButton(text="📊 Мой статус", callback_data="menu:status"),
         InlineKeyboardButton(text="💬 Поддержка", callback_data="menu:support"),
@@ -92,6 +93,25 @@ def cancel_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="◀️ Отмена", callback_data="nav:cancel")]]
     )
+
+
+def referral_inline(link: str, share_text: str, available: int) -> InlineKeyboardMarkup:
+    from urllib.parse import quote
+
+    share_url = f"https://t.me/share/url?url={quote(link)}&text={quote(share_text)}"
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="📤 Поделиться ссылкой", url=share_url)],
+    ]
+    if available > 0:
+        rows.append([InlineKeyboardButton(text=f"💸 Запросить выплату ({available} ₽)", callback_data="ref:payout")])
+    rows.append([InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def referral_payout_admin(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Отметить выплаченным", callback_data=f"refpaid:{telegram_id}")
+    ]])
 
 
 def payment_review(payment_id: int) -> InlineKeyboardMarkup:

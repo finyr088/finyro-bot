@@ -63,6 +63,14 @@ class User(Base):
     streak: Mapped[int] = mapped_column(Integer, default=0)
     last_active_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    # Реферальная программа
+    referred_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )                                                      # кто пригласил этого ученика
+    referral_rewarded: Mapped[bool] = mapped_column(Boolean, default=False)  # комиссия за него уже начислена
+    referral_earned: Mapped[int] = mapped_column(Integer, default=0)         # заработал как пригласивший, ₽
+    referral_paid_out: Mapped[int] = mapped_column(Integer, default=0)       # из них уже выплачено, ₽
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     payments: Mapped[list["Payment"]] = relationship(back_populates="user")
