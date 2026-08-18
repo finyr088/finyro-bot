@@ -58,16 +58,19 @@ def cancel_menu() -> ReplyKeyboardMarkup:
 
 def main_menu_inline(has_access: bool) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    if has_access and _webapp_available():
-        rows.append([InlineKeyboardButton(text="🚀 Открыть приложение", web_app=WebAppInfo(url=settings.MINIAPP_URL))])
-    if _webapp_available():
-        rows.append([InlineKeyboardButton(text="🌐 Открыть на сайте (если Telegram тормозит)", url=settings.MINIAPP_URL)])
-    rows.append([
-        InlineKeyboardButton(text="🎓 О курсе", callback_data="menu:about"),
-        InlineKeyboardButton(text="❓ Как учиться", callback_data="menu:how"),
-    ])
-    if not has_access:
-        rows.append([InlineKeyboardButton(text="💳 Оплатить доступ", callback_data="menu:pay")])
+    if has_access:
+        # Приложение и сайт — только после подтверждения доступа админом.
+        if _webapp_available():
+            rows.append([InlineKeyboardButton(text="🚀 Открыть приложение", web_app=WebAppInfo(url=settings.MINIAPP_URL))])
+            rows.append([InlineKeyboardButton(text="🌐 Открыть на сайте (если Telegram тормозит)", url=settings.MINIAPP_URL)])
+        rows.append([
+            InlineKeyboardButton(text="🎓 О курсе", callback_data="menu:about"),
+            InlineKeyboardButton(text="❓ Как учиться", callback_data="menu:how"),
+        ])
+    else:
+        # Ещё не оплатил — никакого доступа к приложению/сайту, только запись.
+        rows.append([InlineKeyboardButton(text="🎓 Курс", callback_data="menu:about")])
+        rows.append([InlineKeyboardButton(text="✍️ Записаться на курс", callback_data="menu:pay")])
     rows.append([InlineKeyboardButton(text="🎁 Реферальная программа", callback_data="menu:ref")])
     rows.append([
         InlineKeyboardButton(text="📊 Мой статус", callback_data="menu:status"),
