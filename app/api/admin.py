@@ -184,12 +184,22 @@ async def students(q: str | None = None, session: AsyncSession = Depends(get_ses
     if q:
         ql = q.lower()
         rows = [u for u in rows if ql in (u.full_name or "").lower() or ql in str(u.telegram_id)]
+    # Сколько людей привёл каждый пользователь (для проверки рефералки).
+    ref_counts = dict(
+        (await session.execute(
+            select(User.referred_by_id, func.count())
+            .where(User.referred_by_id.isnot(None))
+            .group_by(User.referred_by_id)
+        )).all()
+    )
     return {"students": [{
         "telegram_id": u.telegram_id,
         "name": u.full_name,
         "username": u.username,
         "has_access": u.has_access(),
         "created_at": u.created_at.isoformat(),
+        "referrals": ref_counts.get(u.id, 0),
+        "referral_earned": u.referral_earned or 0,
     } for u in rows]}
 
 
@@ -211,6 +221,18 @@ async def manage_student(telegram_id: int, action: str, admin: User = Depends(re
         await session.commit()
         await send_to_user(user.telegram_id, bot_texts.ACCESS_REVOKED, reply_markup=bot_kb.main_menu_inline(False))
     return {"ok": True, "has_access": user.has_access()}
+
+
+@router.delete("/students/{telegram_id}")
+async def delete_student(telegram_id: int, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_session)):
+    """Полностью удаляет аккаунт ученика и все его данные."""
+    user = await services.get_user_by_tg(session, telegram_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
+    name = user.full_name
+    await services.delete_user(session, user)
+    await session.commit()
+    return {"ok": True, "name": name}
 
 
 # ─────────────────────────── Контент ─────────────────────────

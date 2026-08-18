@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 
 _EPOCH = datetime(1970, 1, 1)
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +18,7 @@ from .config import settings
 from .models import (
     AdminLog,
     Attachment,
+    LoginCode,
     Material,
     MaterialKind,
     MaterialProgress,
@@ -71,6 +72,19 @@ async def get_or_create_user(
 
 async def get_user_by_tg(session: AsyncSession, telegram_id: int) -> User | None:
     return await session.scalar(select(User).where(User.telegram_id == telegram_id))
+
+
+async def delete_user(session: AsyncSession, user: User) -> None:
+    """Полностью удаляет аккаунт и все связанные данные — чтобы человек мог
+    прийти заново (в т.ч. по реферальной ссылке) как новый пользователь."""
+    uid = user.id
+    for model in (Payment, TestAttempt, MaterialProgress, SupportMessage, LoginCode):
+        await session.execute(delete(model).where(model.user_id == uid))
+    # Отвязываем тех, кого этот пользователь пригласил.
+    await session.execute(
+        update(User).where(User.referred_by_id == uid).values(referred_by_id=None)
+    )
+    await session.delete(user)
 
 
 # --- Доступ ---

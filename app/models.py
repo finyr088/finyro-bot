@@ -71,6 +71,10 @@ class User(Base):
     referral_earned: Mapped[int] = mapped_column(Integer, default=0)         # заработал как пригласивший, ₽
     referral_paid_out: Mapped[int] = mapped_column(Integer, default=0)       # из них уже выплачено, ₽
 
+    # Единый «якорный» блок в чате ученика — id последнего сообщения бота,
+    # которое переиспользуется (редактируется), чтобы чат не разрастался.
+    anchor_msg_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     payments: Mapped[list["Payment"]] = relationship(back_populates="user")

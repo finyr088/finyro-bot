@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -65,7 +66,7 @@ async def _show_referral(target, telegram_id: int, edit: bool) -> None:
     if edit:
         await _edit(target, text, markup)
     else:
-        await target.answer(text, reply_markup=markup)
+        await _student_screen(target, text, markup)
 
 
 class PayFlow(StatesGroup):
@@ -88,21 +89,78 @@ async def _touch_user(tg_user) -> tuple[str, bool]:
         return user.full_name, user.has_access()
 
 
+async def _save_anchor(uid: int, msg_id: int | None) -> None:
+    async with session_scope() as session:
+        user = await services.get_or_create_user(session, uid)
+        user.anchor_msg_id = msg_id
+        await session.commit()
+
+
+async def _get_anchor(uid: int) -> int | None:
+    async with session_scope() as session:
+        user = await services.get_user_by_tg(session, uid)
+        return user.anchor_msg_id if user else None
+
+
 async def _edit(call: CallbackQuery, text: str, markup=None) -> None:
-    """Редактирует текущее сообщение (навигация внутри одного сообщения)."""
+    """Редактирует текущее сообщение (навигация внутри одного блока)."""
+    uid = call.from_user.id
     try:
         await call.message.edit_text(text, reply_markup=markup)
+        if not settings.is_admin(uid):
+            await _save_anchor(uid, call.message.message_id)
+    except TelegramBadRequest as exc:
+        if "not modified" not in str(exc).lower():
+            m = await call.message.answer(text, reply_markup=markup)
+            if not settings.is_admin(uid):
+                await _save_anchor(uid, m.message_id)
     except Exception:
-        await call.message.answer(text, reply_markup=markup)
+        try:
+            m = await call.message.answer(text, reply_markup=markup)
+            if not settings.is_admin(uid):
+                await _save_anchor(uid, m.message_id)
+        except Exception:
+            pass
     try:
         await call.answer()
     except Exception:
         pass
 
 
+async def _student_screen(message: Message, text: str, markup=None) -> None:
+    """Показывает экран в ответ на сообщение ученика, удерживая один блок:
+    удаляет входящее сообщение и переиспользует (редактирует) якорный блок бота.
+    Для админа поведение прежнее — просто отправляем сообщение."""
+    uid = message.from_user.id
+    if settings.is_admin(uid):
+        await message.answer(text, reply_markup=markup)
+        return
+    bot, chat_id = message.bot, message.chat.id
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    anchor = await _get_anchor(uid)
+    if anchor:
+        try:
+            await bot.edit_message_text(text, chat_id=chat_id, message_id=anchor, reply_markup=markup)
+            return
+        except TelegramBadRequest as exc:
+            if "not modified" in str(exc).lower():
+                return
+            try:
+                await bot.delete_message(chat_id, anchor)
+            except Exception:
+                pass
+        except Exception:
+            pass
+    m = await bot.send_message(chat_id, text, reply_markup=markup)
+    await _save_anchor(uid, m.message_id)
+
+
 async def _send_menu(message: Message) -> None:
     name, has = await _touch_user(message.from_user)
-    await message.answer(texts.main_menu_text(name, has), reply_markup=kb.main_menu_inline(has))
+    await _student_screen(message, texts.main_menu_text(name, has), kb.main_menu_inline(has))
 
 
 # ─────────────────────────── Команды ──────────────────────────
@@ -121,11 +179,17 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         # Закрепляем за пригласившим только новых пользователей, пришедших по ссылке.
         if is_new and ref_tg is not None:
             await services.attach_referral(session, user, ref_tg)
+        anchor = user.anchor_msg_id
         await session.commit()
         name, has = user.full_name, user.has_access()
-    # Первое сообщение убирает старую reply-клавиатуру (если осталась от прошлых версий).
-    await message.answer("🎓 Добро пожаловать в <b>Финуро</b>!", reply_markup=ReplyKeyboardRemove())
-    await message.answer(texts.main_menu_text(name, has), reply_markup=kb.main_menu_inline(has))
+    # Разово убираем старую reply-клавиатуру (у не-админов, при первом запуске).
+    if not settings.is_admin(message.from_user.id) and not anchor:
+        try:
+            tmp = await message.answer("🎓 Добро пожаловать в <b>Финуро</b>!", reply_markup=ReplyKeyboardRemove())
+            await tmp.delete()
+        except Exception:
+            pass
+    await _student_screen(message, texts.main_menu_text(name, has), kb.main_menu_inline(has))
 
 
 @router.message(Command("menu"))
@@ -258,13 +322,16 @@ async def receive_proof(message: Message, state: FSMContext) -> None:
         f"Сумма: {settings.COURSE_PRICE}"
     )
     await notify_admins_photo(file_id, caption, reply_markup=kb.payment_review(payment_id))
-    await message.answer(texts.PROOF_RECEIVED)
-    await _send_menu(message)
+    await _student_screen(message, texts.PROOF_RECEIVED, kb.back_inline())
 
 
 @router.message(PayFlow.waiting_proof)
 async def proof_not_a_file(message: Message) -> None:
-    await message.answer("Пришлите, пожалуйста, скриншот или файл чека 📸 (или нажмите «Отмена»).")
+    await _student_screen(
+        message,
+        "📸 Пришлите, пожалуйста, <b>скриншот или файл</b> чека об оплате (или нажмите «Отмена»).",
+        kb.cancel_inline(),
+    )
 
 
 # ─────────────────────────── Поддержка ────────────────────────
@@ -288,8 +355,7 @@ async def receive_support(message: Message, state: FSMContext) -> None:
         f"<i>Ответьте на это сообщение (reply), чтобы написать ученику.</i>\n"
         f"#u{tg}"
     )
-    await message.answer(texts.SUPPORT_SENT)
-    await _send_menu(message)
+    await _student_screen(message, texts.SUPPORT_SENT, kb.back_inline())
 
 
 # ─────────────────────────── Фолбэк ───────────────────────────

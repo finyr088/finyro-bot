@@ -911,13 +911,17 @@
         box.innerHTML = d.students.map((u) => `
           <div class="acard">
             <div style="display:flex;align-items:center;gap:8px">
-              <div style="flex:1"><h4>${esc(u.name)}</h4><p>ID: ${u.telegram_id}</p></div>
+              <div style="flex:1">
+                <h4>${esc(u.name)}</h4>
+                <p>ID: ${u.telegram_id}${u.referrals ? ` · 👥 привёл: ${u.referrals}` : ""}${u.referral_earned ? ` · 💰 ${u.referral_earned} ₽` : ""}</p>
+              </div>
               <span class="apill ${u.has_access ? "on" : "off"}">${u.has_access ? "доступ" : "нет"}</span>
             </div>
             <div class="arow">
               ${u.has_access
                 ? `<button class="abtn no" data-rev="${u.telegram_id}">Отозвать</button>`
                 : `<button class="abtn ok" data-grant="${u.telegram_id}">Выдать доступ</button>`}
+              <button class="abtn del" data-del="${u.telegram_id}" data-name="${esc(u.name)}">🗑 Удалить</button>
             </div>
           </div>`).join("");
         const act = (tg, action) => async () => {
@@ -926,6 +930,11 @@
         };
         box.querySelectorAll("[data-grant]").forEach((b) => (b.onclick = act(b.dataset.grant, "grant")));
         box.querySelectorAll("[data-rev]").forEach((b) => (b.onclick = act(b.dataset.rev, "revoke")));
+        box.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => {
+          if (!confirm(`Удалить аккаунт «${b.dataset.name}» со всеми данными? Человек сможет прийти заново по ссылке как новый.`)) return;
+          try { await api("/admin/students/" + b.dataset.del, { method: "DELETE" }); toast("Аккаунт удалён"); load($("#ssearch", el).value.trim()); }
+          catch (e) { toast(e.message); }
+        }));
       } catch (e) { aErr(box, e); }
     };
     let t;
