@@ -109,50 +109,16 @@
   // Экран входа по коду (для обычного браузера, когда Telegram недоступен).
   function renderLogin() {
     applyTheme(currentTheme());
-    let login = "";
-    const render = (step) => {
-      $("#app").innerHTML = `
-        <div class="login-wrap">
-          <div class="login-card">
-            <div class="login-logo">${LOGO_MARK}</div>
-            <h1 class="login-title">Вход в Финуро</h1>
-            ${step === 1 ? `
-              <p class="muted login-sub">Код придёт в Telegram-бот @finyrobot.</p>
-              <input class="login-inp" id="l-login" placeholder="Ваш @юзернейм в Telegram" value="${esc(login)}" autocomplete="off">
-              <button class="btn" id="l-get">Получить код</button>
-              <p class="login-hint">Нет юзернейма? Введите свой Telegram ID (узнать — у бота @userinfobot).</p>
-            ` : `
-              <p class="muted login-sub">Код отправлен в @finyrobot. Введите его:</p>
-              <input class="login-inp" id="l-code" inputmode="numeric" maxlength="6" placeholder="Код из 6 цифр" autocomplete="one-time-code">
-              <button class="btn" id="l-verify">Войти</button>
-              <button class="btn ghost" id="l-back" style="margin-top:8px">← Изменить юзернейм</button>
-            `}
-          </div>
-        </div>`;
-      if (step === 1) {
-        const go = async () => {
-          login = $("#l-login").value.trim();
-          if (!login) { toast("Введите юзернейм или ID"); return; }
-          $("#l-get").disabled = true;
-          try { await api("/auth/request_code", { method: "POST", body: { login } }); toast("Код отправлен в Telegram ✅"); render(2); }
-          catch (e) { toast(e.message); $("#l-get").disabled = false; }
-        };
-        $("#l-get").onclick = go;
-        $("#l-login").addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
-      } else {
-        const go = async () => {
-          const code = $("#l-code").value.trim();
-          if (!code) { toast("Введите код"); return; }
-          $("#l-verify").disabled = true;
-          try { const auth = await api("/auth/verify_code", { method: "POST", body: { login, code } }); afterAuth(auth); }
-          catch (e) { toast(e.message); $("#l-verify").disabled = false; }
-        };
-        $("#l-verify").onclick = go;
-        $("#l-code").addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
-        $("#l-back").onclick = () => render(1);
-      }
-    };
-    render(1);
+    $("#app").innerHTML = `
+      <div class="login-wrap">
+        <div class="login-card">
+          <div class="login-logo">${LOGO_MARK}</div>
+          <h1 class="login-title">Курс открывается в Telegram</h1>
+          <p class="muted login-sub">Доступ к материалам — только внутри приложения Telegram. Откройте бота Финуро и нажмите «🚀 Открыть приложение».</p>
+          <a class="btn" href="https://t.me/finyrobot" target="_blank" rel="noopener" style="text-decoration:none">Открыть бота @finyrobot</a>
+          <p class="login-hint">Вход через браузер отключён в целях защиты доступа.</p>
+        </div>
+      </div>`;
   }
 
   function renderFatal(e) {

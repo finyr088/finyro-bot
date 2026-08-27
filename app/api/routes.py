@@ -104,8 +104,16 @@ async def _find_user_by_login(session: AsyncSession, login: str) -> User | None:
     return await session.scalar(select(User).where(func.lower(User.username) == login.lower()))
 
 
+CODE_LOGIN_DISABLED_MSG = (
+    "Вход через браузер отключён. Откройте курс в приложении Telegram: "
+    "бот @finyrobot → кнопка «🚀 Открыть приложение»."
+)
+
+
 @router.post("/auth/request_code")
 async def request_code(body: RequestCodeIn, session: AsyncSession = Depends(get_session)):
+    if not settings.ALLOW_CODE_LOGIN:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, CODE_LOGIN_DISABLED_MSG)
     user = await _find_user_by_login(session, body.login)
     if user is None:
         raise HTTPException(
@@ -142,6 +150,8 @@ async def request_code(body: RequestCodeIn, session: AsyncSession = Depends(get_
 
 @router.post("/auth/verify_code")
 async def verify_code(body: VerifyCodeIn, session: AsyncSession = Depends(get_session)):
+    if not settings.ALLOW_CODE_LOGIN:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, CODE_LOGIN_DISABLED_MSG)
     user = await _find_user_by_login(session, body.login)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")

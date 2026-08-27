@@ -100,6 +100,10 @@ class Settings:
         "PAY_REQUISITES",
         "Реквизиты для перевода пока не указаны. Напишите в поддержку.",
     )
+    # Вход в мини-апп через браузер по коду (вне Telegram). Выключен ради защиты
+    # от шеринга: доступ к курсу — только внутри приложения Telegram.
+    ALLOW_CODE_LOGIN: bool = _get_bool("ALLOW_CODE_LOGIN", False)
+
     # Реквизиты оплаты — редактируются из админки (хранятся в БД, это стартовые).
     PAY_CARD: str = _get("PAY_CARD", "")
     PAY_PHONE: str = _get("PAY_PHONE", "")
