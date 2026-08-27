@@ -243,6 +243,21 @@ async def manage_student(telegram_id: int, action: str, admin: User = Depends(re
     return {"ok": True, "has_access": user.has_access()}
 
 
+@router.get("/sharing")
+async def sharing(session: AsyncSession = Depends(get_session)):
+    """Аккаунты, подозрительные на шеринг (несколько человек с одного доступа)."""
+    return {"flagged": await services.sharing_report(session)}
+
+
+@router.get("/students/{telegram_id}/access")
+async def student_access(telegram_id: int, session: AsyncSession = Depends(get_session)):
+    """Детали доступов ученика: IP, устройства, когда заходил."""
+    user = await services.get_user_by_tg(session, telegram_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
+    return await services.user_access_detail(session, user)
+
+
 @router.delete("/students/{telegram_id}")
 async def delete_student(telegram_id: int, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_session)):
     """Полностью удаляет аккаунт ученика и все его данные."""

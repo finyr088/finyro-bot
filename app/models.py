@@ -266,6 +266,20 @@ class Setting(Base):
     value: Mapped[str] = mapped_column(Text)
 
 
+class AccessFingerprint(Base):
+    """Отпечаток доступа: с каких IP/устройств заходит ученик — для детекции
+    шеринга одного оплаченного аккаунта несколькими людьми."""
+    __tablename__ = "access_fingerprints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    device: Mapped[str] = mapped_column(String(200), default="")
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    hits: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class AdminLog(Base):
     __tablename__ = "admin_logs"
 

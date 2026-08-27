@@ -4,7 +4,7 @@ from __future__ import annotations
 import random
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -167,15 +167,24 @@ async def verify_code(body: VerifyCodeIn, session: AsyncSession = Depends(get_se
 
 # --- Личный кабинет ---
 
+def _client_ip(request: Request) -> str:
+    """Реальный IP клиента: первый адрес из X-Forwarded-For (его ставит Caddy)."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
 @router.get("/me")
-async def me(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+async def me(request: Request, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     summary = await services.progress_summary(session, user)
     has = effective_access(user)
     streak = await services.touch_activity(session, user)
     summary["course_percent"] = await services.course_progress(session, user) if has else 0
     cont = await services.continue_video(session, user) if has else None
     badges = await services.badges(session, user) if has else []
-    await session.commit()  # сохраняем обновлённый стрик
+    await services.record_access(session, user.id, _client_ip(request), request.headers.get("user-agent"))
+    await session.commit()  # сохраняем обновлённый стрик и отпечаток доступа
     return {
         "user": _user_public(user),
         "progress": summary,
@@ -243,6 +252,7 @@ async def list_videos(user: User = Depends(require_access), session: AsyncSessio
 @router.get("/videos/{material_id}")
 async def get_video(
     material_id: int,
+    request: Request,
     user: User = Depends(require_access),
     session: AsyncSession = Depends(get_session),
 ):
@@ -250,6 +260,7 @@ async def get_video(
     if mat is None or mat.kind != MaterialKind.VIDEO or not mat.is_visible():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вебинар не найден или ещё не опубликован")
     await services.touch_opened(session, user.id, mat.id)
+    await services.record_access(session, user.id, _client_ip(request), request.headers.get("user-agent"))
     await session.commit()
     watched = await services.get_progress(session, user.id, mat.id)
     # Загруженные файлы отдаём по внутреннему пути /media/<файл>; внешние ссылки — как есть.

@@ -798,6 +798,7 @@
     ["overview", "Обзор"], ["payments", "Заявки"], ["students", "Ученики"],
     ["webinars", "Вебинары"], ["content", "Контент"], ["schedule", "Расписание"],
     ["tests", "Тесты"], ["support", "Поддержка"], ["broadcast", "Рассылка"], ["results", "Результаты"],
+    ["sharing", "🛡 Доступы"],
   ];
 
   async function authBlob(path) {
@@ -842,7 +843,7 @@
     ({
       overview: aOverview, payments: aPayments, students: aStudents, webinars: aWebinars,
       content: aContent, schedule: aSchedule, tests: aTests, support: aSupport,
-      broadcast: aBroadcast, results: aResults,
+      broadcast: aBroadcast, results: aResults, sharing: aSharing,
     })[name](el);
   }
 
@@ -958,6 +959,57 @@
     let t;
     $("#ssearch", el).oninput = (ev) => { clearTimeout(t); t = setTimeout(() => load(ev.target.value.trim()), 350); };
     load("");
+  }
+
+  // --- Доступы: детекция шеринга аккаунта ---
+  async function aSharing(el) {
+    aLoad(el);
+    try {
+      const d = await api("/admin/sharing");
+      const levelBadge = (lv) => lv === "high"
+        ? '<span class="apill" style="background:#3a1414;color:#ff8a8a">высокий риск</span>'
+        : lv === "medium"
+        ? '<span class="apill" style="background:#3a3114;color:#ffd66b">средний</span>'
+        : '<span class="apill on">низкий</span>';
+      const head = `<div class="acard"><h4>🛡 Проверка на общий доступ</h4>
+        <p class="ahint">Аккаунты, чьи заходы похожи на «несколько человек с одного доступа»: разные сети/устройства или вход из двух мест почти одновременно. Это подсказки для проверки, а не приговор. У видео уже стоит именной водяной знак (имя + id) — он виден на любой записи экрана.</p></div>`;
+      if (!d.flagged.length) {
+        el.innerHTML = head + `<div class="acard"><p>Подозрительных аккаунтов не найдено ✅</p></div>`;
+        return;
+      }
+      el.innerHTML = head + d.flagged.map((u) => `
+        <div class="acard">
+          <div style="flex:1"><h4>${esc(u.name)} ${levelBadge(u.level)}</h4>
+            <p>ID: ${u.telegram_id} · ${u.has_access ? "есть доступ" : "нет доступа"}</p></div>
+          <p style="color:#cfcfcf;margin:8px 0">
+            🌐 сетей: <b>${u.nets}</b> · 📱 устройств: <b>${u.devices}</b> · IP: <b>${u.ips}</b>${u.concurrent ? ` · ⚠️ <b style="color:#ff8a8a">вход из 2 мест почти одновременно</b>` : ""}
+          </p>
+          <div class="arow">
+            <button class="abtn sec" data-acc="${u.telegram_id}">Показать заходы</button>
+            <button class="abtn del" data-del="${u.telegram_id}" data-name="${esc(u.name)}">🗑 Удалить</button>
+          </div>
+          <div class="access-detail" id="acc-${u.telegram_id}"></div>
+        </div>`).join("");
+      el.querySelectorAll("[data-acc]").forEach((b) => (b.onclick = async () => {
+        const box = $("#acc-" + b.dataset.acc, el);
+        if (box.innerHTML) { box.innerHTML = ""; return; }
+        box.innerHTML = '<p class="ahint">Загрузка…</p>';
+        try {
+          const det = await api("/admin/students/" + b.dataset.acc + "/access");
+          box.innerHTML = det.fingerprints.map((f) => `
+            <div class="acc-row">
+              <span class="acc-ip">${esc(f.ip)}</span>
+              <span class="acc-dev">${esc(f.device_label)}</span>
+              <span class="acc-when">${new Date(f.last_seen).toLocaleString("ru-RU")} · ${f.hits}×</span>
+            </div>`).join("") || '<p class="ahint">Пока нет данных о заходах.</p>';
+        } catch (e) { box.innerHTML = `<p class="ahint">${esc(e.message)}</p>`; }
+      }));
+      el.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => {
+        if (!confirm(`Удалить аккаунт «${b.dataset.name}» со всеми данными?`)) return;
+        try { await api("/admin/students/" + b.dataset.del, { method: "DELETE" }); toast("Аккаунт удалён"); aSharing(el); }
+        catch (e) { toast(e.message); }
+      }));
+    } catch (e) { aErr(el, e); }
   }
 
   // --- Вебинары (админ): разделы → темы → видео → вложения ---

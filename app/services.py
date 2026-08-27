@@ -25,6 +25,7 @@ from .models import (
     MaterialStatus,
     Payment,
     PaymentStatus,
+    AccessFingerprint,
     Section,
     Setting,
     SupportMessage,
@@ -131,13 +132,149 @@ async def delete_user(session: AsyncSession, user: User) -> None:
     """Полностью удаляет аккаунт и все связанные данные — чтобы человек мог
     прийти заново (в т.ч. по реферальной ссылке) как новый пользователь."""
     uid = user.id
-    for model in (Payment, TestAttempt, MaterialProgress, SupportMessage, LoginCode):
+    for model in (Payment, TestAttempt, MaterialProgress, SupportMessage, LoginCode, AccessFingerprint):
         await session.execute(delete(model).where(model.user_id == uid))
     # Отвязываем тех, кого этот пользователь пригласил.
     await session.execute(
         update(User).where(User.referred_by_id == uid).values(referred_by_id=None)
     )
     await session.delete(user)
+
+
+# --- Детекция шеринга аккаунта (один платный доступ на нескольких) ---
+
+def _net16(ip: str) -> str:
+    """Грубый идентификатор сети (для оценки «разных мест»)."""
+    ip = (ip or "").strip()
+    if "." in ip:
+        parts = ip.split(".")
+        return ".".join(parts[:2]) if len(parts) >= 2 else ip
+    if ":" in ip:
+        return ":".join(ip.split(":")[:2])
+    return ip or "?"
+
+
+def device_label(ua: str) -> str:
+    """Короткая понятная метка устройства из User-Agent."""
+    u = (ua or "").lower()
+    if "android" in u:
+        os_ = "Android"
+    elif "iphone" in u or "ipad" in u or ("like mac" in u and "mobile" in u):
+        os_ = "iPhone/iPad"
+    elif "windows" in u:
+        os_ = "Windows"
+    elif "mac os" in u or "macintosh" in u:
+        os_ = "Mac"
+    elif "linux" in u:
+        os_ = "Linux"
+    else:
+        os_ = "Другое"
+    if "telegram" in u:
+        return os_ + " · Telegram"
+    if "chrome" in u:
+        return os_ + " · Chrome"
+    if "firefox" in u:
+        return os_ + " · Firefox"
+    if "safari" in u:
+        return os_ + " · Safari"
+    return os_
+
+
+async def record_access(session: AsyncSession, user_id: int, ip: str | None, ua: str | None) -> None:
+    """Фиксирует отпечаток (IP + устройство) доступа. Дедуплицирует по паре."""
+    ip = (ip or "").strip()[:64] or "unknown"
+    device = (ua or "").strip()[:200] or "unknown"
+    fp = await session.scalar(select(AccessFingerprint).where(
+        AccessFingerprint.user_id == user_id,
+        AccessFingerprint.ip == ip,
+        AccessFingerprint.device == device,
+    ))
+    now = utcnow()
+    if fp is None:
+        session.add(AccessFingerprint(
+            user_id=user_id, ip=ip, device=device, first_seen=now, last_seen=now, hits=1
+        ))
+    else:
+        fp.last_seen = now
+        fp.hits = (fp.hits or 0) + 1
+
+
+def _analyze_fps(fps: list) -> dict:
+    ips = {f.ip for f in fps}
+    devices = {f.device for f in fps}
+    nets = {_net16(f.ip) for f in fps}
+    # Одновременность: два разных «места» (сети) в пределах 5 минут — сильный сигнал.
+    concurrent = None
+    events = sorted(fps, key=lambda f: f.last_seen)
+    for i in range(1, len(events)):
+        a, b = events[i - 1], events[i]
+        if _net16(a.ip) != _net16(b.ip) and (b.last_seen - a.last_seen).total_seconds() <= 300:
+            concurrent = b.last_seen
+            break
+    score = 0
+    if concurrent:
+        score += 3
+    if len(devices) >= 3:
+        score += 2
+    elif len(devices) == 2:
+        score += 1
+    if len(nets) >= 4:
+        score += 2
+    elif len(nets) == 3:
+        score += 1
+    level = "high" if score >= 3 else "medium" if score >= 2 else "low"
+    return {
+        "ips": len(ips), "devices": len(devices), "nets": len(nets),
+        "concurrent": concurrent.isoformat() if concurrent else None,
+        "score": score, "level": level,
+    }
+
+
+async def sharing_report(session: AsyncSession, days: int = 45) -> list[dict]:
+    """Список подозрительных на шеринг аккаунтов (score ≥ 2), от опасных к менее."""
+    since = utcnow() - timedelta(days=days)
+    rows = list(await session.scalars(
+        select(AccessFingerprint).where(AccessFingerprint.last_seen >= since)
+    ))
+    by_user: dict[int, list] = {}
+    for r in rows:
+        by_user.setdefault(r.user_id, []).append(r)
+    out = []
+    for uid, fps in by_user.items():
+        user = await session.get(User, uid)
+        if user is None or settings.is_admin(user.telegram_id):
+            continue
+        a = _analyze_fps(fps)
+        if a["score"] < 2:
+            continue
+        out.append({
+            "telegram_id": user.telegram_id, "name": user.full_name,
+            "has_access": user.has_access(), **a,
+        })
+    out.sort(key=lambda x: (-x["score"], -x["nets"], -x["devices"]))
+    return out
+
+
+async def user_access_detail(session: AsyncSession, user: User) -> dict:
+    fps = list(await session.scalars(
+        select(AccessFingerprint)
+        .where(AccessFingerprint.user_id == user.id)
+        .order_by(AccessFingerprint.last_seen.desc())
+    ))
+    a = _analyze_fps(fps) if fps else {
+        "ips": 0, "devices": 0, "nets": 0, "concurrent": None, "score": 0, "level": "low"
+    }
+    return {
+        "telegram_id": user.telegram_id, "name": user.full_name, "has_access": user.has_access(),
+        **a,
+        "fingerprints": [{
+            "ip": f.ip,
+            "device_label": device_label(f.device),
+            "first_seen": f.first_seen.isoformat(),
+            "last_seen": f.last_seen.isoformat(),
+            "hits": f.hits or 1,
+        } for f in fps[:80]],
+    }
 
 
 # --- Доступ ---
