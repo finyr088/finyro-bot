@@ -189,7 +189,6 @@ async def me(request: Request, user: User = Depends(get_current_user), session: 
     has = effective_access(user)
     streak = await services.touch_activity(session, user)
     summary["course_percent"] = await services.course_progress(session, user) if has else 0
-    cont = await services.continue_video(session, user) if has else None
     badges = await services.badges(session, user) if has else []
     await services.record_access(session, user.id, _client_ip(request), request.headers.get("user-agent"))
     await session.commit()  # сохраняем обновлённый стрик и отпечаток доступа
@@ -198,7 +197,6 @@ async def me(request: Request, user: User = Depends(get_current_user), session: 
         "progress": summary,
         "streak": streak,
         "badges": badges,
-        "continue": cont,
         "course": {"title": settings.COURSE_TITLE, "price": settings.COURSE_PRICE},
     }
 

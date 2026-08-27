@@ -251,25 +251,9 @@
         api("/events").catch(() => ({ events: [] })),
         api("/leaderboard").catch(() => ({ leaderboard: [], me: { rank: null, points: 0 }, total: 0 })),
       ]);
-      const cont = me.continue;
       const newItems = videos.videos.filter((v) => !v.watched).slice(0, 3);
       let html = `<h1 class="title">Привет, ${esc(firstName(me.user.name))}! 👋</h1>`;
       html += statsBand(me, lb);
-
-      if (cont) {
-        const label = cont.watched ? "Пересмотреть" : "Досмотреть";
-        const kicker = cont.watched ? "Продолжить просмотр" : "Продолжить с того же места";
-        html += `
-          <div class="card continue-card" id="cont">
-            <div class="thumb">${ICONS.videos}</div>
-            <div class="grow">
-              <div class="cc-kicker">${kicker}</div>
-              <h3>${esc(cont.title)}</h3>
-              <p>${esc(cont.description || "Вебинар курса")}</p>
-            </div>
-            <div class="cc-action"><span class="play">▶</span><span class="cc-cta">${label}</span></div>
-          </div>`;
-      }
 
       html += `
         <h2 class="section">Новые материалы</h2>
@@ -287,10 +271,6 @@
         <h2 class="section">Расписание</h2>
         <div id="cal-host"></div>`;
       el.innerHTML = html;
-
-      if (cont) {
-        $("#cont", el).onclick = () => openVideo(cont.id);
-      }
 
       mountCalendar($("#cal-host", el), ev.events || []);
       renderLeaderboardCard($("#lb", el), lb);
@@ -879,7 +859,7 @@
   async function aOverview(el) {
     aLoad(el);
     try {
-      const [d, price] = await Promise.all([api("/admin/overview"), api("/admin/price")]);
+      const [d, price, pay] = await Promise.all([api("/admin/overview"), api("/admin/price"), api("/admin/payinfo")]);
       el.innerHTML = `
         <div class="astats">
           <div class="astat"><div class="n">${d.total_users}</div><div class="l">Учеников</div></div>
@@ -898,7 +878,27 @@
           </div>
           <p class="ahint" id="priceNow">Сейчас: ${esc(price.price_display)}</p>
         </div>
+        <div class="acard">
+          <h4>💳 Реквизиты для оплаты</h4>
+          <p class="ahint">Что видит ученик на экране «Оплатить». Меняется в боте сразу. Пустые поля не показываются.</p>
+          <input class="ainput" id="payCard" placeholder="Номер карты (напр. 2200 0000 0000 0000)" value="${esc(pay.card || "")}">
+          <input class="ainput" id="payBank" placeholder="Банк (напр. Т-Банк / Сбер)" value="${esc(pay.bank || "")}">
+          <input class="ainput" id="payPhone" placeholder="Телефон для СБП (напр. +7 900 000-00-00)" value="${esc(pay.phone || "")}">
+          <input class="ainput" id="payRecipient" placeholder="Получатель (напр. Иван И.)" value="${esc(pay.recipient || "")}">
+          <button class="abtn ok" id="paySave" style="margin-top:6px">Сохранить реквизиты</button>
+        </div>
         ${d.pending > 0 ? `<div class="acard"><h4>🔔 Есть новые заявки на оплату</h4><p>Откройте вкладку «Заявки», чтобы подтвердить доступ.</p></div>` : ""}`;
+      $("#paySave", el).onclick = async () => {
+        try {
+          await api("/admin/payinfo", { method: "POST", body: {
+            card: $("#payCard", el).value.trim(),
+            bank: $("#payBank", el).value.trim(),
+            phone: $("#payPhone", el).value.trim(),
+            recipient: $("#payRecipient", el).value.trim(),
+          }});
+          toast("Реквизиты сохранены ✅ Теперь они в боте.");
+        } catch (e) { toast(e.message); }
+      };
       $("#priceSave", el).onclick = async () => {
         const rub = parseInt($("#priceInput", el).value, 10);
         if (!Number.isFinite(rub) || rub < 0) { toast("Введите сумму в рублях"); return; }

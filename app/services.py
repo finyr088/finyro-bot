@@ -71,6 +71,10 @@ _RUNTIME_SETTINGS = [
     ("guard_enabled", "GUARD_ENABLED", "bool"),
     ("guard_lock_minutes", "GUARD_LOCK_MINUTES", "int"),
     ("guard_window_seconds", "GUARD_WINDOW_SECONDS", "int"),
+    ("pay_card", "PAY_CARD", "str"),
+    ("pay_phone", "PAY_PHONE", "str"),
+    ("pay_bank", "PAY_BANK", "str"),
+    ("pay_recipient", "PAY_RECIPIENT", "str"),
 ]
 
 
@@ -91,9 +95,23 @@ async def load_runtime_settings(session: AsyncSession) -> None:
                 pass
         elif typ == "bool":
             setattr(settings, attr, str(raw).strip().lower() in {"1", "true", "yes", "on"})
+        else:  # str
+            setattr(settings, attr, raw)
     if seeded:
         await session.commit()
     _apply_price(settings.COURSE_PRICE_RUB)
+
+
+async def update_pay_info(session: AsyncSession, card: str, phone: str, bank: str, recipient: str) -> None:
+    """Обновляет реквизиты оплаты и применяет в рантайме (бот сразу видит новые)."""
+    settings.PAY_CARD = (card or "").strip()[:64]
+    settings.PAY_PHONE = (phone or "").strip()[:64]
+    settings.PAY_BANK = (bank or "").strip()[:80]
+    settings.PAY_RECIPIENT = (recipient or "").strip()[:80]
+    await set_setting(session, "pay_card", settings.PAY_CARD)
+    await set_setting(session, "pay_phone", settings.PAY_PHONE)
+    await set_setting(session, "pay_bank", settings.PAY_BANK)
+    await set_setting(session, "pay_recipient", settings.PAY_RECIPIENT)
 
 
 async def update_course_price(session: AsyncSession, rub: int) -> int:

@@ -57,9 +57,28 @@ def welcome() -> str:
 
 
 def payment_requisites() -> str:
+    card = (settings.PAY_CARD or "").strip()
+    phone = (settings.PAY_PHONE or "").strip()
+    bank = (settings.PAY_BANK or "").strip()
+    recipient = (settings.PAY_RECIPIENT or "").strip()
+
+    lines = []
+    if card:
+        lines.append(f"💳 Карта: <code>{escape(card)}</code>" + (f"  ({escape(bank)})" if bank else ""))
+    if phone:
+        extra = f"  ({escape(bank)})" if bank and not card else ""
+        lines.append(f"📱 СБП / телефон: <code>{escape(phone)}</code>{extra}")
+    if recipient:
+        lines.append(f"👤 Получатель: {escape(recipient)}")
+
+    # Если реквизиты ещё не заданы в админке — используем текст из настроек.
+    body = "\n".join(lines) if lines else escape(settings.PAY_REQUISITES)
+
     return (
         "💳 <b>Оплата доступа</b>\n\n"
-        f"{settings.PAY_REQUISITES}\n\n"
+        f"Стоимость: <b>{escape(settings.COURSE_PRICE)}</b>\n\n"
+        f"{body}\n\n"
+        "После перевода пришлите сюда <b>скриншот или чек</b> об оплате одним сообщением.\n\n"
         "⚠️ Доступ персональный. Передача материалов третьим лицам — основание "
         "для блокировки без возврата средств."
     )

@@ -137,6 +137,28 @@ async def set_price(body: PriceIn, session: AsyncSession = Depends(get_session))
     return {"ok": True, "price_rub": settings.COURSE_PRICE_RUB, "price_display": settings.COURSE_PRICE}
 
 
+class PayInfoIn(BaseModel):
+    card: str = ""
+    phone: str = ""
+    bank: str = ""
+    recipient: str = ""
+
+
+@router.get("/payinfo")
+async def get_payinfo():
+    return {
+        "card": settings.PAY_CARD, "phone": settings.PAY_PHONE,
+        "bank": settings.PAY_BANK, "recipient": settings.PAY_RECIPIENT,
+    }
+
+
+@router.post("/payinfo")
+async def set_payinfo(body: PayInfoIn, session: AsyncSession = Depends(get_session)):
+    await services.update_pay_info(session, body.card, body.phone, body.bank, body.recipient)
+    await session.commit()
+    return {"ok": True}
+
+
 # ─────────────────────────── Заявки ──────────────────────────
 
 @router.get("/payments")

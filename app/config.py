@@ -98,10 +98,13 @@ class Settings:
     GUARD_WINDOW_SECONDS: int = _get_int("GUARD_WINDOW_SECONDS", 120)
     PAY_REQUISITES: str = _get(
         "PAY_REQUISITES",
-        "Перевод на карту: 0000 0000 0000 0000 (Банк, Имя Ф.)\n"
-        "Или по СБП: +7 900 000-00-00\n\n"
-        "После перевода пришлите сюда скриншот/чек об оплате одним сообщением.",
+        "Реквизиты для перевода пока не указаны. Напишите в поддержку.",
     )
+    # Реквизиты оплаты — редактируются из админки (хранятся в БД, это стартовые).
+    PAY_CARD: str = _get("PAY_CARD", "")
+    PAY_PHONE: str = _get("PAY_PHONE", "")
+    PAY_BANK: str = _get("PAY_BANK", "")
+    PAY_RECIPIENT: str = _get("PAY_RECIPIENT", "")
     # Срок доступа в днях после подтверждения. 0 = бессрочно.
     ACCESS_DAYS: int = _get_int("ACCESS_DAYS", 0)
 
