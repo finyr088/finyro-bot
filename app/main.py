@@ -69,6 +69,11 @@ async def _startup_db() -> None:
         await init_db()
         from .seed import seed_if_empty
         await seed_if_empty()
+        # Загружаем редактируемые настройки (цена курса) из БД в рантайм.
+        from .db import session_scope
+        from . import services
+        async with session_scope() as session:
+            await services.load_runtime_settings(session)
         log.info("БД инициализирована")
     except Exception:  # noqa: BLE001
         log.exception("Ошибка инициализации БД (сервер продолжит работу)")

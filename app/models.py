@@ -258,6 +258,14 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Setting(Base):
+    """Редактируемые из админки настройки (ключ→значение). Напр. цена курса."""
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
 class AdminLog(Base):
     __tablename__ = "admin_logs"
 

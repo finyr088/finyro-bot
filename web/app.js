@@ -853,7 +853,7 @@
   async function aOverview(el) {
     aLoad(el);
     try {
-      const d = await api("/admin/overview");
+      const [d, price] = await Promise.all([api("/admin/overview"), api("/admin/price")]);
       el.innerHTML = `
         <div class="astats">
           <div class="astat"><div class="n">${d.total_users}</div><div class="l">Учеников</div></div>
@@ -863,7 +863,25 @@
           <div class="astat"><div class="n">${d.tests}</div><div class="l">Тестов</div></div>
           <div class="astat"><div class="n">${d.attempts}</div><div class="l">Попыток</div></div>
         </div>
+        <div class="acard">
+          <h4>💰 Цена курса</h4>
+          <p class="ahint">Меняется мгновенно везде: в боте, при оплате и в расчёте реферальных выплат.</p>
+          <div class="arow" style="align-items:center">
+            <input class="ainput" id="priceInput" type="number" min="0" step="10" value="${price.price_rub}" style="max-width:160px;margin:0"> <span style="color:#9a9a9a">₽</span>
+            <button class="abtn ok" id="priceSave">Сохранить цену</button>
+          </div>
+          <p class="ahint" id="priceNow">Сейчас: ${esc(price.price_display)}</p>
+        </div>
         ${d.pending > 0 ? `<div class="acard"><h4>🔔 Есть новые заявки на оплату</h4><p>Откройте вкладку «Заявки», чтобы подтвердить доступ.</p></div>` : ""}`;
+      $("#priceSave", el).onclick = async () => {
+        const rub = parseInt($("#priceInput", el).value, 10);
+        if (!Number.isFinite(rub) || rub < 0) { toast("Введите сумму в рублях"); return; }
+        try {
+          const r = await api("/admin/price", { method: "POST", body: { price_rub: rub } });
+          $("#priceNow", el).textContent = "Сейчас: " + r.price_display;
+          toast("Цена обновлена: " + r.price_display + " ✅");
+        } catch (e) { toast(e.message); }
+      };
     } catch (e) { aErr(el, e); }
   }
 

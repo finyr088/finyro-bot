@@ -26,6 +26,7 @@ from .models import (
     Payment,
     PaymentStatus,
     Section,
+    Setting,
     SupportMessage,
     Test,
     TestAttempt,
@@ -33,6 +34,58 @@ from .models import (
     User,
     utcnow,
 )
+
+
+# --- Настройки (редактируются из админки) ---
+
+PRICE_KEY = "course_price_rub"
+
+
+def format_price(rub: int) -> str:
+    """3490 → «3 490 ₽» (разделитель тысяч — пробел)."""
+    return f"{int(rub):,}".replace(",", " ") + " ₽"
+
+
+async def get_setting(session: AsyncSession, key: str) -> str | None:
+    return await session.scalar(select(Setting.value).where(Setting.key == key))
+
+
+async def set_setting(session: AsyncSession, key: str, value) -> None:
+    obj = await session.get(Setting, key)
+    if obj is None:
+        session.add(Setting(key=key, value=str(value)))
+    else:
+        obj.value = str(value)
+
+
+def _apply_price(rub: int) -> None:
+    """Обновляет цену в рантайме (процесс один — бот и веб видят сразу)."""
+    settings.COURSE_PRICE_RUB = rub
+    settings.COURSE_PRICE = format_price(rub)
+
+
+async def load_runtime_settings(session: AsyncSession) -> None:
+    """Загружает цену из БД в settings. При первом запуске — инициализирует
+    значением из окружения/дефолта."""
+    raw = await get_setting(session, PRICE_KEY)
+    if raw is None:
+        rub = settings.COURSE_PRICE_RUB
+        await set_setting(session, PRICE_KEY, rub)
+        await session.commit()
+    else:
+        try:
+            rub = int(raw)
+        except (TypeError, ValueError):
+            rub = settings.COURSE_PRICE_RUB
+    _apply_price(rub)
+
+
+async def update_course_price(session: AsyncSession, rub: int) -> int:
+    """Сохраняет новую цену курса и применяет её в рантайме. Возвращает ₽."""
+    rub = max(0, int(rub))
+    await set_setting(session, PRICE_KEY, rub)
+    _apply_price(rub)
+    return rub
 
 
 # --- Пользователи ---

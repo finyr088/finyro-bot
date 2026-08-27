@@ -80,6 +80,10 @@ class TestImportIn(BaseModel):
     text: str
 
 
+class PriceIn(BaseModel):
+    price_rub: int
+
+
 class SectionIn(BaseModel):
     title: str
 
@@ -115,6 +119,22 @@ async def overview(session: AsyncSession = Depends(get_session)):
     tests = await session.scalar(select(func.count(Test.id))) or 0
     attempts = await session.scalar(select(func.count(TestAttempt.id))) or 0
     return {**c, "materials": materials, "tests": tests, "attempts": attempts}
+
+
+# ─────────────────────────── Цена курса ──────────────────────
+
+@router.get("/price")
+async def get_price():
+    return {"price_rub": settings.COURSE_PRICE_RUB, "price_display": settings.COURSE_PRICE}
+
+
+@router.post("/price")
+async def set_price(body: PriceIn, session: AsyncSession = Depends(get_session)):
+    if body.price_rub < 0 or body.price_rub > 100_000_000:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Некорректная сумма")
+    await services.update_course_price(session, body.price_rub)
+    await session.commit()
+    return {"ok": True, "price_rub": settings.COURSE_PRICE_RUB, "price_display": settings.COURSE_PRICE}
 
 
 # ─────────────────────────── Заявки ──────────────────────────
