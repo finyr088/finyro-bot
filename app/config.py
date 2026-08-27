@@ -90,6 +90,12 @@ class Settings:
     REFERRAL_PERCENT_REST: int = _get_int("REFERRAL_PERCENT_REST", 15)
     # Юзернейм бота для персональных ссылок. Пусто = определим через get_me().
     BOT_USERNAME: str = _get("BOT_USERNAME", "").lstrip("@")
+
+    # --- Защита от шеринга: «перегрев» аккаунта при одновременном доступе ---
+    # Все три редактируются из админки (хранятся в БД, эти значения — стартовые).
+    GUARD_ENABLED: bool = _get_bool("GUARD_ENABLED", True)
+    GUARD_LOCK_MINUTES: int = _get_int("GUARD_LOCK_MINUTES", 15)
+    GUARD_WINDOW_SECONDS: int = _get_int("GUARD_WINDOW_SECONDS", 120)
     PAY_REQUISITES: str = _get(
         "PAY_REQUISITES",
         "Перевод на карту: 0000 0000 0000 0000 (Банк, Имя Ф.)\n"

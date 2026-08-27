@@ -243,6 +243,41 @@ async def manage_student(telegram_id: int, action: str, admin: User = Depends(re
     return {"ok": True, "has_access": user.has_access()}
 
 
+class GuardIn(BaseModel):
+    enabled: bool
+    lock_minutes: int
+    window_seconds: int | None = None
+
+
+@router.get("/guard")
+async def get_guard():
+    return {
+        "enabled": settings.GUARD_ENABLED,
+        "lock_minutes": settings.GUARD_LOCK_MINUTES,
+        "window_seconds": settings.GUARD_WINDOW_SECONDS,
+    }
+
+
+@router.post("/guard")
+async def set_guard(body: GuardIn, session: AsyncSession = Depends(get_session)):
+    await services.update_guard_config(
+        session, body.enabled, body.lock_minutes,
+        body.window_seconds if body.window_seconds is not None else settings.GUARD_WINDOW_SECONDS,
+    )
+    await session.commit()
+    return {"ok": True, "enabled": settings.GUARD_ENABLED, "lock_minutes": settings.GUARD_LOCK_MINUTES}
+
+
+@router.post("/guard/unlock/{telegram_id}")
+async def unlock_student(telegram_id: int, session: AsyncSession = Depends(get_session)):
+    user = await services.get_user_by_tg(session, telegram_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
+    await services.guard_unlock(session, user)
+    await session.commit()
+    return {"ok": True}
+
+
 @router.get("/sharing")
 async def sharing(session: AsyncSession = Depends(get_session)):
     """Аккаунты, подозрительные на шеринг (несколько человек с одного доступа)."""

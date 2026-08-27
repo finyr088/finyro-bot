@@ -55,8 +55,19 @@
     toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
   }
 
+  function deviceId() {
+    try {
+      let d = localStorage.getItem("finyro_device");
+      if (!d) {
+        d = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
+        localStorage.setItem("finyro_device", d);
+      }
+      return d;
+    } catch (_) { return "nodevice"; }
+  }
+
   async function api(path, { method = "GET", body } = {}) {
-    const headers = { "Content-Type": "application/json" };
+    const headers = { "Content-Type": "application/json", "X-Device-Id": deviceId() };
     if (state.token) headers["Authorization"] = "Bearer " + state.token;
     const res = await fetch("/api" + path, {
       method,
@@ -579,11 +590,12 @@
         }
       }, { once: true });
 
-      // Сохранение позиции (раз в ~5с и на паузе)
+      // Сохранение позиции (раз в ~5с и на паузе) + «пульс» для защиты от шеринга
       let lastSave = 0;
       const savePos = () => {
         const p = Math.floor(vid.currentTime || 0);
-        api("/videos/" + id + "/progress", { method: "POST", body: { position: p } }).catch(() => {});
+        api("/videos/" + id + "/progress", { method: "POST", body: { position: p } })
+          .catch((e) => { if (e.status === 423) { try { vid.pause(); } catch (_) {} lockScreen(el, e.message); } });
       };
       vid.addEventListener("timeupdate", () => {
         const now = Date.now();
@@ -610,7 +622,20 @@
       };
       wb.onclick = mark;
       vid.addEventListener("ended", mark, { once: true });
-    } catch (e) { errCard(el, e); }
+    } catch (e) {
+      if (e.status === 423) { lockScreen(el, e.message); } else { errCard(el, e); }
+    }
+  }
+
+  function lockScreen(el, msg) {
+    el.innerHTML = `
+      <button class="back" id="lkback">◀️ Назад</button>
+      <div class="card lock-card">
+        <div class="lock-ic">🔒</div>
+        <h3>Доступ приостановлен</h3>
+        <p>${esc(msg || "Замечен вход с другого устройства. Смотрите курс только на одном устройстве.")}</p>
+      </div>`;
+    $("#lkback", el).onclick = gotoVideosTab;
   }
 
   const fmtTime = (s) => {
@@ -965,31 +990,56 @@
   async function aSharing(el) {
     aLoad(el);
     try {
-      const d = await api("/admin/sharing");
+      const [d, g] = await Promise.all([api("/admin/sharing"), api("/admin/guard")]);
       const levelBadge = (lv) => lv === "high"
         ? '<span class="apill" style="background:#3a1414;color:#ff8a8a">высокий риск</span>'
         : lv === "medium"
         ? '<span class="apill" style="background:#3a3114;color:#ffd66b">средний</span>'
         : '<span class="apill on">низкий</span>';
-      const head = `<div class="acard"><h4>🛡 Проверка на общий доступ</h4>
-        <p class="ahint">Аккаунты, чьи заходы похожи на «несколько человек с одного доступа»: разные сети/устройства или вход из двух мест почти одновременно. Это подсказки для проверки, а не приговор. У видео уже стоит именной водяной знак (имя + id) — он виден на любой записи экрана.</p></div>`;
-      if (!d.flagged.length) {
-        el.innerHTML = head + `<div class="acard"><p>Подозрительных аккаунтов не найдено ✅</p></div>`;
-        return;
-      }
-      el.innerHTML = head + d.flagged.map((u) => `
+      const guardCard = `
         <div class="acard">
-          <div style="flex:1"><h4>${esc(u.name)} ${levelBadge(u.level)}</h4>
+          <h4>🛡 Защита от одновременного доступа («перегрев»)</h4>
+          <p class="ahint">Если аккаунт открывают с двух устройств одновременно — видео блокируется для всех на заданное время. Работает по скрытому ID устройства, поэтому VPN не помогает обойти.</p>
+          <label style="display:flex;align-items:center;gap:8px;color:#ddd;font-size:14px;margin:8px 0">
+            <input type="checkbox" id="gEnabled" ${g.enabled ? "checked" : ""}> Защита включена
+          </label>
+          <div class="arow" style="align-items:center">
+            <span style="color:#9a9a9a;font-size:13px">Блокировка на</span>
+            <input class="ainput" id="gMin" type="number" min="1" max="720" value="${g.lock_minutes}" style="max-width:90px;margin:0">
+            <span style="color:#9a9a9a;font-size:13px">мин</span>
+            <button class="abtn ok" id="gSave">Сохранить</button>
+          </div>
+        </div>`;
+      const head = `<div class="acard"><h4>🔎 Подозрительные аккаунты</h4>
+        <p class="ahint">Заходы, похожие на «несколько человек с одного доступа»: разные сети/устройства или вход из двух мест почти одновременно. Это подсказки для проверки, а не приговор. На видео стоит именной водяной знак (имя + id) — виден на любой записи экрана.</p></div>`;
+      const flaggedHtml = d.flagged.length ? d.flagged.map((u) => `
+        <div class="acard">
+          <div style="flex:1"><h4>${esc(u.name)} ${levelBadge(u.level)}${u.locked ? ' <span class="apill" style="background:#3a1414;color:#ff8a8a">🔒 заблокирован</span>' : ""}</h4>
             <p>ID: ${u.telegram_id} · ${u.has_access ? "есть доступ" : "нет доступа"}</p></div>
           <p style="color:#cfcfcf;margin:8px 0">
             🌐 сетей: <b>${u.nets}</b> · 📱 устройств: <b>${u.devices}</b> · IP: <b>${u.ips}</b>${u.concurrent ? ` · ⚠️ <b style="color:#ff8a8a">вход из 2 мест почти одновременно</b>` : ""}
           </p>
           <div class="arow">
             <button class="abtn sec" data-acc="${u.telegram_id}">Показать заходы</button>
+            ${u.locked ? `<button class="abtn ok" data-unlock="${u.telegram_id}">🔓 Снять блокировку</button>` : ""}
             <button class="abtn del" data-del="${u.telegram_id}" data-name="${esc(u.name)}">🗑 Удалить</button>
           </div>
           <div class="access-detail" id="acc-${u.telegram_id}"></div>
-        </div>`).join("");
+        </div>`).join("") : `<div class="acard"><p>Подозрительных аккаунтов не найдено ✅</p></div>`;
+      el.innerHTML = guardCard + head + flaggedHtml;
+      $("#gSave", el).onclick = async () => {
+        try {
+          const r = await api("/admin/guard", { method: "POST", body: {
+            enabled: $("#gEnabled", el).checked,
+            lock_minutes: parseInt($("#gMin", el).value, 10) || 15,
+          }});
+          toast(r.enabled ? `Защита включена, блок ${r.lock_minutes} мин ✅` : "Защита выключена");
+        } catch (e) { toast(e.message); }
+      };
+      el.querySelectorAll("[data-unlock]").forEach((b) => (b.onclick = async () => {
+        try { await api("/admin/guard/unlock/" + b.dataset.unlock, { method: "POST" }); toast("Блокировка снята"); aSharing(el); }
+        catch (e) { toast(e.message); }
+      }));
       el.querySelectorAll("[data-acc]").forEach((b) => (b.onclick = async () => {
         const box = $("#acc-" + b.dataset.acc, el);
         if (box.innerHTML) { box.innerHTML = ""; return; }

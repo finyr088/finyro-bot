@@ -75,6 +75,11 @@ class User(Base):
     # которое переиспользуется (редактируется), чтобы чат не разрастался.
     anchor_msg_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Защита от шеринга: одно активное устройство + «перегрев» при коллизии.
+    active_device: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    active_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     payments: Mapped[list["Payment"]] = relationship(back_populates="user")

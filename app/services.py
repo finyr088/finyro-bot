@@ -65,20 +65,35 @@ def _apply_price(rub: int) -> None:
     settings.COURSE_PRICE = format_price(rub)
 
 
+# Редактируемые из админки настройки: ключ в БД → атрибут settings → тип.
+_RUNTIME_SETTINGS = [
+    (PRICE_KEY, "COURSE_PRICE_RUB", "int"),
+    ("guard_enabled", "GUARD_ENABLED", "bool"),
+    ("guard_lock_minutes", "GUARD_LOCK_MINUTES", "int"),
+    ("guard_window_seconds", "GUARD_WINDOW_SECONDS", "int"),
+]
+
+
 async def load_runtime_settings(session: AsyncSession) -> None:
-    """Загружает цену из БД в settings. При первом запуске — инициализирует
-    значением из окружения/дефолта."""
-    raw = await get_setting(session, PRICE_KEY)
-    if raw is None:
-        rub = settings.COURSE_PRICE_RUB
-        await set_setting(session, PRICE_KEY, rub)
+    """Загружает редактируемые настройки из БД в settings. Отсутствующие —
+    инициализирует текущими значениями (из окружения/дефолта)."""
+    seeded = False
+    for key, attr, typ in _RUNTIME_SETTINGS:
+        raw = await get_setting(session, key)
+        if raw is None:
+            val = getattr(settings, attr)
+            await set_setting(session, key, "1" if val is True else ("0" if val is False else val))
+            seeded = True
+        elif typ == "int":
+            try:
+                setattr(settings, attr, int(raw))
+            except (TypeError, ValueError):
+                pass
+        elif typ == "bool":
+            setattr(settings, attr, str(raw).strip().lower() in {"1", "true", "yes", "on"})
+    if seeded:
         await session.commit()
-    else:
-        try:
-            rub = int(raw)
-        except (TypeError, ValueError):
-            rub = settings.COURSE_PRICE_RUB
-    _apply_price(rub)
+    _apply_price(settings.COURSE_PRICE_RUB)
 
 
 async def update_course_price(session: AsyncSession, rub: int) -> int:
@@ -87,6 +102,55 @@ async def update_course_price(session: AsyncSession, rub: int) -> int:
     await set_setting(session, PRICE_KEY, rub)
     _apply_price(rub)
     return rub
+
+
+async def update_guard_config(session: AsyncSession, enabled: bool, minutes: int, window: int) -> None:
+    """Обновляет параметры защиты от шеринга и применяет в рантайме."""
+    settings.GUARD_ENABLED = bool(enabled)
+    settings.GUARD_LOCK_MINUTES = max(1, min(int(minutes), 720))
+    settings.GUARD_WINDOW_SECONDS = max(10, min(int(window), 3600))
+    await set_setting(session, "guard_enabled", "1" if settings.GUARD_ENABLED else "0")
+    await set_setting(session, "guard_lock_minutes", settings.GUARD_LOCK_MINUTES)
+    await set_setting(session, "guard_window_seconds", settings.GUARD_WINDOW_SECONDS)
+
+
+async def guard_check(session: AsyncSession, user: User, device_id: str | None) -> dict:
+    """Контроль одновременного доступа. Если аккаунт уже «активен» на другом
+    устройстве в пределах окна — «перегревает» его (блок на N минут) для всех.
+    Возвращает {'locked': bool, 'seconds_left': int}."""
+    now = utcnow()
+    device_id = (device_id or "").strip()[:64] or "nodevice"
+
+    # Админ не ограничивается; при выключенной защите просто отмечаем устройство.
+    if settings.is_admin(user.telegram_id) or not settings.GUARD_ENABLED:
+        user.active_device = device_id
+        user.active_seen = now
+        return {"locked": False, "seconds_left": 0}
+
+    # Уже в «перегреве».
+    if user.locked_until and user.locked_until > now:
+        return {"locked": True, "seconds_left": int((user.locked_until - now).total_seconds())}
+
+    other_active = (
+        user.active_device
+        and user.active_device != device_id
+        and user.active_seen
+        and (now - user.active_seen).total_seconds() <= settings.GUARD_WINDOW_SECONDS
+    )
+    if other_active:
+        user.locked_until = now + timedelta(minutes=settings.GUARD_LOCK_MINUTES)
+        return {"locked": True, "seconds_left": int((user.locked_until - now).total_seconds())}
+
+    # Обычный доступ или передача сессии на новое устройство (старое простаивает).
+    user.active_device = device_id
+    user.active_seen = now
+    return {"locked": False, "seconds_left": 0}
+
+
+async def guard_unlock(session: AsyncSession, user: User) -> None:
+    user.locked_until = None
+    user.active_device = None
+    user.active_seen = None
 
 
 # --- Пользователи ---
@@ -249,10 +313,17 @@ async def sharing_report(session: AsyncSession, days: int = 45) -> list[dict]:
             continue
         out.append({
             "telegram_id": user.telegram_id, "name": user.full_name,
-            "has_access": user.has_access(), **a,
+            "has_access": user.has_access(), **a, **_lock_state(user),
         })
     out.sort(key=lambda x: (-x["score"], -x["nets"], -x["devices"]))
     return out
+
+
+def _lock_state(user: User) -> dict:
+    now = utcnow()
+    if user.locked_until and user.locked_until > now:
+        return {"locked": True, "lock_seconds": int((user.locked_until - now).total_seconds())}
+    return {"locked": False, "lock_seconds": 0}
 
 
 async def user_access_detail(session: AsyncSession, user: User) -> dict:
@@ -266,7 +337,7 @@ async def user_access_detail(session: AsyncSession, user: User) -> dict:
     }
     return {
         "telegram_id": user.telegram_id, "name": user.full_name, "has_access": user.has_access(),
-        **a,
+        **a, **_lock_state(user),
         "fingerprints": [{
             "ip": f.ip,
             "device_label": device_label(f.device),

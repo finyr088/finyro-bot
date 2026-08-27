@@ -175,6 +175,14 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
+def _lock_message(seconds_left: int) -> str:
+    mins = max(1, (seconds_left + 59) // 60)
+    return (
+        "⛔ Доступ к видео временно приостановлен: замечен вход с другого устройства. "
+        f"Смотреть можно только на одном устройстве. Попробуйте снова через ~{mins} мин."
+    )
+
+
 @router.get("/me")
 async def me(request: Request, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     summary = await services.progress_summary(session, user)
@@ -259,9 +267,12 @@ async def get_video(
     mat = await session.get(Material, material_id)
     if mat is None or mat.kind != MaterialKind.VIDEO or not mat.is_visible():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вебинар не найден или ещё не опубликован")
+    guard = await services.guard_check(session, user, request.headers.get("x-device-id"))
     await services.touch_opened(session, user.id, mat.id)
     await services.record_access(session, user.id, _client_ip(request), request.headers.get("user-agent"))
     await session.commit()
+    if guard["locked"]:
+        raise HTTPException(status.HTTP_423_LOCKED, _lock_message(guard["seconds_left"]))
     watched = await services.get_progress(session, user.id, mat.id)
     # Загруженные файлы отдаём по внутреннему пути /media/<файл>; внешние ссылки — как есть.
     stream_url = mat.stream_url or ""
@@ -288,14 +299,19 @@ class PositionIn(BaseModel):
 async def save_video_position(
     material_id: int,
     body: PositionIn,
+    request: Request,
     user: User = Depends(require_access),
     session: AsyncSession = Depends(get_session),
 ):
     mat = await session.get(Material, material_id)
     if mat is None or mat.kind != MaterialKind.VIDEO:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вебинар не найден")
-    await services.save_position(session, user.id, material_id, body.position)
+    guard = await services.guard_check(session, user, request.headers.get("x-device-id"))
+    if not guard["locked"]:
+        await services.save_position(session, user.id, material_id, body.position)
     await session.commit()
+    if guard["locked"]:
+        raise HTTPException(status.HTTP_423_LOCKED, _lock_message(guard["seconds_left"]))
     return {"ok": True}
 
 
