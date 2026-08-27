@@ -171,6 +171,22 @@ async def guard_unlock(session: AsyncSession, user: User) -> None:
     user.active_seen = None
 
 
+async def locked_accounts(session: AsyncSession) -> list[dict]:
+    """Кто сейчас в блокировке («перегрет») — для быстрой разблокировки по
+    обращению в поддержку. Включает всех, независимо от уровня подозрения."""
+    now = utcnow()
+    users = list(await session.scalars(
+        select(User)
+        .where(User.locked_until.isnot(None), User.locked_until > now)
+        .order_by(User.locked_until.desc())
+    ))
+    return [{
+        "telegram_id": u.telegram_id,
+        "name": u.full_name,
+        "lock_seconds": int((u.locked_until - now).total_seconds()),
+    } for u in users]
+
+
 # --- Пользователи ---
 
 async def get_or_create_user(

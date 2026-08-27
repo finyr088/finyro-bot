@@ -302,8 +302,11 @@ async def unlock_student(telegram_id: int, session: AsyncSession = Depends(get_s
 
 @router.get("/sharing")
 async def sharing(session: AsyncSession = Depends(get_session)):
-    """Аккаунты, подозрительные на шеринг (несколько человек с одного доступа)."""
-    return {"flagged": await services.sharing_report(session)}
+    """Аккаунты, подозрительные на шеринг + кто сейчас заблокирован."""
+    return {
+        "flagged": await services.sharing_report(session),
+        "locked": await services.locked_accounts(session),
+    }
 
 
 @router.get("/students/{telegram_id}/access")

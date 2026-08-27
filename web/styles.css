@@ -367,6 +367,8 @@ textarea:focus { outline: none; border-color: var(--violet-500); }
 .lock-card .lock-ic { font-size: 46px; line-height: 1; margin-bottom: 12px; }
 .lock-card h3 { margin: 0 0 8px; }
 .lock-card p { color: var(--muted); }
+.lk-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid #2a2a2a; }
+.lk-row:first-of-type { border-top: none; }
 .access-detail { margin-top: 10px; }
 .access-detail:empty { margin: 0; }
 .acc-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 8px 0; border-top: 1px solid #2a2a2a; font-size: 13px; }

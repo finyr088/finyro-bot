@@ -965,7 +965,7 @@
       const guardCard = `
         <div class="acard">
           <h4>🛡 Защита от одновременного доступа («перегрев»)</h4>
-          <p class="ahint">Если аккаунт открывают с двух устройств одновременно — видео блокируется для всех на заданное время. Работает по скрытому ID устройства, поэтому VPN не помогает обойти.</p>
+          <p class="ahint">Если аккаунт открывают с двух устройств одновременно — видео блокируется для всех на заданное время. Работает по скрытому ID устройства, поэтому VPN не помогает обойти. Изменения применяются сразу.</p>
           <label style="display:flex;align-items:center;gap:8px;color:#ddd;font-size:14px;margin:8px 0">
             <input type="checkbox" id="gEnabled" ${g.enabled ? "checked" : ""}> Защита включена
           </label>
@@ -975,6 +975,17 @@
             <span style="color:#9a9a9a;font-size:13px">мин</span>
             <button class="abtn ok" id="gSave">Сохранить</button>
           </div>
+        </div>`;
+      const lockedList = d.locked || [];
+      const lockedCard = `
+        <div class="acard">
+          <h4>🔒 Сейчас заблокированы (${lockedList.length})</h4>
+          <p class="ahint">Кто попал под «перегрев». Если ученик написал в поддержку и хочет зайти, например, с ноутбука — снимите блокировку здесь, доступ вернётся сразу.</p>
+          ${lockedList.length ? lockedList.map((u) => `
+            <div class="lk-row">
+              <div style="flex:1;min-width:0"><b>${esc(u.name)}</b> <span class="ahint">ID ${u.telegram_id} · осталось ~${Math.max(1, Math.ceil(u.lock_seconds / 60))} мин</span></div>
+              <button class="abtn ok" data-unlock="${u.telegram_id}">🔓 Снять блокировку</button>
+            </div>`).join("") : `<p style="color:#9a9a9a;margin:6px 0 0">Сейчас никто не заблокирован ✅</p>`}
         </div>`;
       const head = `<div class="acard"><h4>🔎 Подозрительные аккаунты</h4>
         <p class="ahint">Заходы, похожие на «несколько человек с одного доступа»: разные сети/устройства или вход из двух мест почти одновременно. Это подсказки для проверки, а не приговор. На видео стоит именной водяной знак (имя + id) — виден на любой записи экрана.</p></div>`;
@@ -992,7 +1003,7 @@
           </div>
           <div class="access-detail" id="acc-${u.telegram_id}"></div>
         </div>`).join("") : `<div class="acard"><p>Подозрительных аккаунтов не найдено ✅</p></div>`;
-      el.innerHTML = guardCard + head + flaggedHtml;
+      el.innerHTML = guardCard + lockedCard + head + flaggedHtml;
       $("#gSave", el).onclick = async () => {
         try {
           const r = await api("/admin/guard", { method: "POST", body: {

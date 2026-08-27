@@ -94,7 +94,7 @@ class Settings:
     # --- Защита от шеринга: «перегрев» аккаунта при одновременном доступе ---
     # Все три редактируются из админки (хранятся в БД, эти значения — стартовые).
     GUARD_ENABLED: bool = _get_bool("GUARD_ENABLED", True)
-    GUARD_LOCK_MINUTES: int = _get_int("GUARD_LOCK_MINUTES", 15)
+    GUARD_LOCK_MINUTES: int = _get_int("GUARD_LOCK_MINUTES", 5)
     GUARD_WINDOW_SECONDS: int = _get_int("GUARD_WINDOW_SECONDS", 120)
     PAY_REQUISITES: str = _get(
         "PAY_REQUISITES",
