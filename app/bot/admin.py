@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from html import escape
 
 from aiogram import F, Router
 from aiogram.filters import BaseFilter, Command, StateFilter
@@ -96,23 +97,25 @@ async def list_payments(message: Message) -> None:
     for p, user in rows:
         caption = (
             f"🧾 Заявка #{p.id}\n"
-            f"Ученик: {user.full_name}\n"
+            f"Ученик: {escape(user.full_name)}\n"
             f"ID: <code>{user.telegram_id}</code>\n"
             f"Создана: {p.created_at:%d.%m.%Y %H:%M}"
         )
-        if p.proof_file_id:
-            try:
-                from .instance import get_bot
-                bot = get_bot()
-                if bot:
-                    await bot.send_photo(
-                        message.chat.id, p.proof_file_id, caption=caption,
-                        reply_markup=kb.payment_review(p.id),
-                    )
+        markup = kb.payment_review(p.id)
+        from .instance import get_bot
+        bot = get_bot()
+        sent = False
+        if p.proof_file_id and bot:
+            # Чек мог быть фото ИЛИ файлом — пробуем оба способа, затем текст.
+            for send in (bot.send_photo, bot.send_document):
+                try:
+                    await send(message.chat.id, p.proof_file_id, caption=caption, reply_markup=markup)
+                    sent = True
+                    break
+                except Exception:
                     continue
-            except Exception:
-                pass
-        await message.answer(caption, reply_markup=kb.payment_review(p.id))
+        if not sent:
+            await message.answer(caption, reply_markup=markup)
 
 
 @router.callback_query(F.data.startswith("pay:"))

@@ -14,7 +14,9 @@ from .. import services
 from .instance import get_bot
 from . import keyboards as kb
 from . import texts
-from .notify import notify_admins, notify_admins_photo
+from html import escape
+
+from .notify import notify_admins, notify_admins_payment
 
 router = Router(name="student")
 
@@ -304,7 +306,8 @@ async def cb_cancel(call: CallbackQuery, state: FSMContext) -> None:
 @router.message(PayFlow.waiting_proof, F.photo)
 @router.message(PayFlow.waiting_proof, F.document)
 async def receive_proof(message: Message, state: FSMContext) -> None:
-    file_id = message.photo[-1].file_id if message.photo else message.document.file_id
+    is_photo = bool(message.photo)
+    file_id = message.photo[-1].file_id if is_photo else message.document.file_id
     async with session_scope() as session:
         user = await services.get_or_create_user(
             session, message.from_user.id, message.from_user.username,
@@ -317,11 +320,19 @@ async def receive_proof(message: Message, state: FSMContext) -> None:
 
     caption = (
         f"🧾 <b>Новая заявка на оплату</b> #{payment_id}\n"
-        f"Ученик: {full_name}\n"
+        f"Ученик: {escape(full_name)}\n"
         f"ID: <code>{tg}</code>\n"
-        f"Сумма: {settings.COURSE_PRICE}"
+        f"Сумма: {escape(settings.COURSE_PRICE)}\n\n"
+        "Подтвердите или отклоните ниже 👇"
     )
-    await notify_admins_photo(file_id, caption, reply_markup=kb.payment_review(payment_id))
+    ok = await notify_admins_payment(file_id, is_photo, caption, reply_markup=kb.payment_review(payment_id))
+    if not ok:
+        # Резерв: пусть хотя бы текстом уйдёт (например, при проблемах со связью).
+        await notify_admins(
+            f"🧾 <b>Новая заявка на оплату</b> #{payment_id}\n"
+            f"Ученик: {escape(full_name)} (<code>{tg}</code>)\n"
+            "Откройте вкладку «Заявки» в приложении, чтобы подтвердить.",
+        )
     await _student_screen(message, texts.PROOF_RECEIVED, kb.back_inline())
 
 
